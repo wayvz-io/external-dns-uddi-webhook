@@ -1,0 +1,5 @@
+# Shell scripts consumed by rules in the root package (buildifier lint).
+exports_files(
+    ["check_buildifier.sh"],
+    visibility = ["//visibility:public"],
+)

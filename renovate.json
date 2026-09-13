@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Managers: gomod (go.mod/go.sum), bazel-module (MODULE.bazel bazel_dep + oci.pull tag/digest; needs `bazelModDeps` in the server-side allowedUnsafeExecutions so it can refresh MODULE.bazel.lock), github-actions (SHA-pinned), nix (flake.lock). allowedUnsafeExecutions/binarySource are server-side options (Renovate CE helmrelease in iac), not settable here.",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "group:allNonMajor",
+    ":automergeMinor",
+    ":dependencyDashboard"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
+  "osvVulnerabilityAlerts": true,
+  "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null,
+    "labels": ["security"]
+  },
+  "ignorePaths": [
+    ".claude/**",
+    "docs/**"
+  ],
+  "bazel-module": {
+    "enabled": true
+  },
+  "nix": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "Enable updates for indirect (transitive) Go deps. Renovate disables these by default (the gomod parser sets enabled=false on any `// indirect` line), and osvVulnerabilityAlerts only covers DIRECT deps - so transitive CVEs (e.g. golang.org/x/net GHSA) would never be fixed. Importing sigs.k8s.io/external-dns drags in a large indirect block (k8s client-go, cloud SDKs), which is exactly where those land; the churn folds into the auto-merging group:allNonMajor bulk PR.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "enabled": true
+    },
+    {
+      "description": "sigs.k8s.io/external-dns defines the webhook/provider contract we implement. Never apply majors automatically, and hold minors/patches out of the bulk PR with automerge OFF: upstream minors have changed provider semantics (DomainFilter JSON, AdjustEndpoints, registry TXT format) and need a human to read the release notes.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["sigs.k8s.io/external-dns"],
+      "groupName": "external-dns",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["sigs.k8s.io/external-dns"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "description": "The Infoblox Universal DDI SDK is pre-1.0 (v0.x) and its generated models/field names have shifted between minors. Isolate it in its own PR so the diff is reviewable against the provider's rdata mapping; CI (mocked client) is not enough to prove compatibility with the live Portal API.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/infobloxopen/universal-ddi-go-client"],
+      "groupName": "universal-ddi-go-client",
+      "automerge": false
+    },
+    {
+      "description": "The distroless base image is digest-pinned in MODULE.bazel (oci.pull). Keep digest bumps in the bulk PR but tag them so they are easy to spot.",
+      "matchManagers": ["bazel-module"],
+      "matchDatasources": ["docker"],
+      "addLabels": ["base-image"]
+    }
+  ]
+}

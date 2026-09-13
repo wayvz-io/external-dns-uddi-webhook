@@ -1,0 +1,30 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "server",
+    srcs = ["server.go"],
+    importpath = "github.com/wayvz-io/external-dns-uddi-webhook/internal/server",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_prometheus_client_golang//prometheus/promhttp",
+        "@io_k8s_sigs_external_dns//provider",
+        "@io_k8s_sigs_external_dns//provider/webhook/api",
+    ],
+)
+
+go_test(
+    name = "server_test",
+    size = "small",
+    srcs = ["server_test.go"],
+    embed = [":server"],
+    deps = [
+        "//internal/provider",
+        "//internal/uddi",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@io_k8s_sigs_external_dns//endpoint",
+        "@io_k8s_sigs_external_dns//pkg/apis/externaldns",
+        "@io_k8s_sigs_external_dns//plan",
+        "@io_k8s_sigs_external_dns//provider/webhook",
+    ],
+)

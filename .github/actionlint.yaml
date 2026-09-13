@@ -1,0 +1,7 @@
+# Self-hosted ARC runner labels (defined in the iac repo) so actionlint does
+# not flag `runs-on` as unknown.
+self-hosted-runner:
+  labels:
+    - bb-ci-worker
+    - runner-nix-amd64
+    - runner-nix-arm64

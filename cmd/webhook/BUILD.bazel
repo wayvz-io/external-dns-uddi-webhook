@@ -1,0 +1,32 @@
+load("@rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "webhook_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/wayvz-io/external-dns-uddi-webhook/cmd/webhook",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//internal/config",
+        "//internal/provider",
+        "//internal/server",
+        "//internal/uddi",
+        "@com_github_caarlos0_env_v11//:env",
+    ],
+)
+
+go_binary(
+    name = "webhook",
+    embed = [":webhook_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "webhook_test",
+    size = "small",
+    srcs = ["main_test.go"],
+    embed = [":webhook_lib"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

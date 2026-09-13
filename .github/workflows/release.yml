@@ -1,0 +1,88 @@
+name: Release
+
+# Triggered by the `vX.Y.Z` tag that release-please.yml creates when its
+# release PR merges. Re-runs the test suite, pushes the multi-arch image to ghcr
+# (tags: vX.Y.Z, vX.Y, latest) and publishes the GitHub release.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build, push image, release
+    runs-on: bb-ci-worker
+    timeout-minutes: 45
+    permissions:
+      contents: write   # create the GitHub release
+      packages: write   # push to ghcr.io
+    env:
+      BES_BACKEND: grpc://bb-portal.buildbarn:8082
+      BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
+      # oci_push (crane) reads registry creds from $DOCKER_CONFIG/config.json.
+      DOCKER_CONFIG: ${{ github.workspace }}/.docker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # tags + history for release notes
+
+      - name: Test on RBE (via bb-clientd)
+        # Same invocation shape as ci.yml (see the comments there); plain
+        # `test`, no coverage instrumentation for the release build.
+        run: |
+          run_tests() {
+            bazel --output_user_root=/clientd/bazel test --config=remote \
+              --remote_executor=unix:///clientd/bb_clientd/grpc \
+              --remote_cache=unix:///clientd/bb_clientd/grpc \
+              --remote_instance_name=frontend.buildbarn \
+              --repository_cache=/clientd/bazel-repo-cache \
+              --bes_backend="$BES_BACKEND" \
+              --bes_results_url="$BES_RESULTS_URL" \
+              //...
+          }
+          run_tests || {
+            echo "::warning::RBE test run failed; retrying once on the same runner (warm cache)."
+            run_tests
+          }
+
+      - name: Log in to ghcr.io
+        # Written by hand rather than docker/login-action: the bb-ci-worker
+        # image is actions-runner + bazel, and `docker login` would want the
+        # CLI/daemon. crane only needs the config.json.
+        run: |
+          mkdir -p "$DOCKER_CONFIG"
+          auth="$(printf '%s:%s' "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}" | base64 -w0)"
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "$auth" > "$DOCKER_CONFIG/config.json"
+          chmod 600 "$DOCKER_CONFIG/config.json"
+
+      - name: Push multi-arch image
+        # --stamp + workspace-status.sh feed STABLE_GIT_TAG into //:image_tags
+        # (latest, vX.Y.Z, vX.Y). The push runs on the runner, so it needs the
+        # image layout locally: override :remote's download_minimal with
+        # --remote_download_outputs=all (one small static binary x2 + distroless).
+        run: |
+          bazel --output_user_root=/clientd/bazel run --config=remote \
+            --remote_executor=unix:///clientd/bb_clientd/grpc \
+            --remote_cache=unix:///clientd/bb_clientd/grpc \
+            --remote_instance_name=frontend.buildbarn \
+            --repository_cache=/clientd/bazel-repo-cache \
+            --bes_backend="$BES_BACKEND" \
+            --bes_results_url="$BES_RESULTS_URL" \
+            --remote_download_outputs=all \
+            --stamp --workspace_status_command=tools/workspace-status.sh \
+            //:push
+
+      - name: Remove registry credentials
+        if: always()
+        run: rm -rf "$DOCKER_CONFIG"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body: |
+            Image: `ghcr.io/wayvz-io/external-dns-uddi-webhook:${{ github.ref_name }}` (linux/amd64, linux/arm64)

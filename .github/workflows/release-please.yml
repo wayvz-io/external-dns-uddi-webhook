@@ -1,0 +1,24 @@
+name: release-please
+
+# Conventional commits on main -> release-please maintains a release PR
+# (CHANGELOG + version bump). Merging that PR creates the `vX.Y.Z` tag and the
+# GitHub release stub, and the tag triggers release.yml (image push).
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          release-type: go
+          include-v-in-tag: true

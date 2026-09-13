@@ -1,0 +1,25 @@
+# Local Bazel overrides -- copy to `.bazelrc.user` (gitignored) and edit.
+#
+# `.bazelrc` try-imports `.bazelrc.user` last, so anything here wins over the
+# committed config. The committed defaults already point at the lab Buildbarn
+# cluster (grpc://bb.lab.wayvz.io:8980, reachable over Tailscale); use this
+# file to change that per machine.
+#
+# Work fully offline by default (same as passing --config=local every time):
+#
+#   build --config=local
+#
+# Point at a different Buildbarn (e.g. a local podman cluster):
+#
+#   build --remote_executor=grpc://localhost:8980
+#   build --remote_instance_name=hardlinking
+#   build --bes_backend=
+#
+# NixOS: .bazelrc pins --shell_executable=/bin/bash for the remote workers and
+# that path does not exist locally. The devshell hook (flake.nix) appends the
+# override below automatically; outside the devshell add it by hand.
+#
+#   common:local --shell_executable=/run/current-system/sw/bin/bash
+#
+# The `remote_platform` exec_properties in //tools/remote-toolchains must match
+# the queue the cluster's scheduler advertises, or actions queue with no worker.

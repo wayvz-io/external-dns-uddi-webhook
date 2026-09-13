@@ -1,0 +1,26 @@
+# Bazel
+bazel-*
+MODULE.bazel.lock.bak
+.bazelrc.user
+
+# Coverage / Sonar scratch
+target/
+.scannerwork/
+
+# Nix / direnv
+result
+result-*
+.direnv/
+
+# Go (non-Bazel local builds)
+*.test
+*.prof
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Agent scratch
+.claude/settings.local.json

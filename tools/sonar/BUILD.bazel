@@ -1,0 +1,22 @@
+load("@rules_shell//shell:sh_binary.bzl", "sh_binary")
+
+# Hermetic SonarQube scan: `bazel run --config=local //tools/sonar:scan`.
+#
+# The `-linux-x64` sonar-scanner distribution bundles its own JRE, so there is
+# no Java toolchain to register and nothing needed on the host PATH.
+#
+# `args` passes the launcher's rlocationpath as $1 -- resolved at analysis time,
+# so scan.sh never has to guess the bzlmod canonical repo name.
+sh_binary(
+    name = "scan",
+    srcs = ["scan.sh"],
+    args = ["$(rlocationpath @sonar_scanner_cli//:bin/sonar-scanner)"],
+    data = [
+        # The launcher is listed explicitly as well as via :dist -- $(rlocationpath)
+        # only accepts a label that is a direct prerequisite of this rule.
+        "@sonar_scanner_cli//:bin/sonar-scanner",
+        "@sonar_scanner_cli//:dist",
+    ],
+    visibility = ["//visibility:public"],
+    deps = ["@bazel_tools//tools/bash/runfiles"],
+)

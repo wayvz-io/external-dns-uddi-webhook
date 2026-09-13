@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # RBE mode: executed remotely on the lab Buildbarn cluster, driven by our
+  # self-hosted ARC runner (`bb-ci-worker`) which runs *inside* the cluster with
+  # Bazel 9.1.1 + bb-clientd preinstalled. Because the runner is in-cluster it
+  # reaches Buildbarn directly over plain gRPC via Kubernetes Service DNS -- no
+  # Tailscale, no gateway, no TLS. The runner + endpoints are defined in the iac
+  # repo (clusters/k3s-office/github-actions-runner + buildbarn).
+  #
+  # This job is the required status check in the branch ruleset -- keep the
+  # `name:` stable.
+  rbe:
+    name: Test (RBE)
+    runs-on: bb-ci-worker
+    # Cap runaway/wedged jobs. Without this GitHub's default is 6h, so a stuck
+    # self-hosted runner blocks the (single) queue slot for hours.
+    timeout-minutes: 30
+    env:
+      BES_BACKEND: grpc://bb-portal.buildbarn:8082
+      # Human-facing https UI link Bazel prints for the invocation.
+      BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Coverage build + test on RBE (via bb-clientd)
+        # The runner's job hook starts bb-clientd -- a local caching proxy whose
+        # CAS lives on a persistent PVC (warm across runs). Bazel talks to its
+        # unix socket; clientd forwards to the in-cluster frontend, selected by
+        # --remote_instance_name (its config's cluster key).
+        #
+        # output_user_root ALSO lives on the PVC (/clientd), so the extracted
+        # external repos + analysis cache persist across the ephemeral runner
+        # pods. repository_cache stays on the PVC too.
+        #
+        # `bazel coverage` == `bazel test --collect_code_coverage`: one
+        # instrumented pass builds everything, runs every test AND emits a Go
+        # coverprofile per test (cover_format=go_cover, see .bazelrc). Sonar's Go
+        # analyzer reads native coverprofiles, not lcov, so there is no lcov
+        # merge step; scripts/merge-go-coverage.sh concatenates them instead.
+        #
+        # Transient RBE/CAS hiccups clear on a plain repeat, so retry once *in
+        # the same step*: staying on this runner pod keeps the warm output base.
+        run: |
+          run_coverage() {
+            bazel --output_user_root=/clientd/bazel coverage --config=remote \
+              --remote_executor=unix:///clientd/bb_clientd/grpc \
+              --remote_cache=unix:///clientd/bb_clientd/grpc \
+              --remote_instance_name=frontend.buildbarn \
+              --repository_cache=/clientd/bazel-repo-cache \
+              --bes_backend="$BES_BACKEND" \
+              --bes_results_url="$BES_RESULTS_URL" \
+              //...
+          }
+          run_coverage || {
+            echo "::warning::RBE coverage run failed; retrying once on the same runner (warm cache)."
+            run_coverage
+          }
+
+      - name: Merge Go coverprofiles
+        run: |
+          testlogs="$(bazel --output_user_root=/clientd/bazel info bazel-testlogs)"
+          scripts/merge-go-coverage.sh "$testlogs" target/sonar/go-coverage.out
+
+      - name: Verify Go coverage report is non-empty
+        # Fail loud: an empty report would silently regress Sonar coverage to ~0.
+        # This does NOT gate merges on coverage CONTENT -- the gate is the
+        # build+test above; this just guards the artifact the scan uses.
+        run: |
+          if [ ! -s target/sonar/go-coverage.out ] || [ "$(wc -l < target/sonar/go-coverage.out)" -lt 2 ]; then
+            echo "::error::target/sonar/go-coverage.out is empty -- bazel coverage produced nothing."
+            exit 1
+          fi
+          echo "go-coverage.out: $(tail -n +2 target/sonar/go-coverage.out | cut -d: -f1 | sort -u | wc -l) source files, $(($(wc -l < target/sonar/go-coverage.out) - 1)) block records"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-coverage
+          path: target/sonar/go-coverage.out
+          retention-days: 3
+          if-no-files-found: error
+
+  sonar-scan:
+    name: sonar scan
+    # Post-merge (+ dispatch) only -- Sonar tracks main. PRs still get the
+    # instrumented gate above (and upload the artifact), just no scan.
+    if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
+    needs: rbe
+    runs-on: runner-nix-amd64
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Sonar's SCM provider (git) + new-code detection need full history/blame.
+          fetch-depth: 0
+
+      - name: Download Go coverage
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: go-coverage
+          path: target/sonar          # -> target/sonar/go-coverage.out
+
+      - name: Verify Go coverage report present
+        run: |
+          if [ ! -s target/sonar/go-coverage.out ]; then
+            echo "::error::target/sonar/go-coverage.out missing after download -- refusing to scan."
+            exit 1
+          fi
+
+      - name: Sonar scan
+        # sonar-project.properties points at target/sonar/go-coverage.out and the
+        # checked-out source tree; one analysis per main commit. The scanner is
+        # hermetic (//tools/sonar:scan, JRE-bundled http_archive); the devshell
+        # supplies `bazel` itself. --config=local: this is a host-side `run`,
+        # nothing to execute remotely.
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_HOST_TOKEN }}
+        run: nix develop --command bazel run --config=local //tools/sonar:scan

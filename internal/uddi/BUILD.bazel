@@ -1,0 +1,34 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "uddi",
+    srcs = [
+        "client.go",
+        "errors.go",
+        "fake.go",
+        "types.go",
+    ],
+    importpath = "github.com/wayvz-io/external-dns-uddi-webhook/internal/uddi",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_infobloxopen_universal_ddi_go_client//client",
+        "@com_github_infobloxopen_universal_ddi_go_client//dnsconfig",
+        "@com_github_infobloxopen_universal_ddi_go_client//dnsdata",
+        "@com_github_infobloxopen_universal_ddi_go_client//option",
+    ],
+)
+
+go_test(
+    name = "uddi_test",
+    size = "small",
+    srcs = [
+        "client_test.go",
+        "errors_test.go",
+        "fake_test.go",
+    ],
+    embed = [":uddi"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

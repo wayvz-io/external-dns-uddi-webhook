@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-dns
+  labels:
+    app.kubernetes.io/name: external-dns
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate   # single writer per TXT owner id
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-dns
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-dns
+    spec:
+      serviceAccountName: external-dns
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        # Upstream controller. Talks to the sidecar on localhost:8888 (the
+        # webhook provider default); 8888 is never exposed outside the pod.
+        - name: external-dns
+          image: registry.k8s.io/external-dns/external-dns:v0.22.0
+          args:
+            - --provider=webhook
+            - --source=service
+            - --source=ingress
+            - --source=gateway-httproute
+            - --registry=txt
+            - --txt-owner-id=k3s-office
+            # Record-type-aware prefix so registry TXT records never collide
+            # with a CNAME of the same name.
+            - --txt-prefix=reg-%{record_type}.
+            - --domain-filter=k3s.lab.wayvz.io
+            - --policy=sync
+            - --interval=1m
+            - --log-format=json
+          ports:
+            - name: http
+              containerPort: 7979
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+
+        # Provider sidecar: translates the webhook API into Universal DDI
+        # Portal calls. Config is env-only (see README.md for the full table).
+        - name: webhook
+          image: ghcr.io/wayvz-io/external-dns-uddi-webhook:latest
+          env:
+            - name: INFOBLOX_PORTAL_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: uddi-api-key
+                  key: api_key
+            - name: INFOBLOX_PORTAL_URL
+              value: https://csp.infoblox.com
+            - name: UDDI_VIEW
+              value: wayvz-internal
+            - name: DOMAIN_FILTER
+              value: k3s.lab.wayvz.io
+            - name: SERVER_HOST
+              value: "127.0.0.1"
+            - name: SERVER_PORT
+              value: "8888"
+            - name: HEALTHZ_HOST
+              value: "0.0.0.0"
+            - name: HEALTHZ_PORT
+              value: "8080"
+            - name: LOG_LEVEL
+              value: info
+          ports:
+            # Health + /metrics only; the provider API stays on localhost:8888.
+            - name: http-webhook
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http-webhook
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http-webhook
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi

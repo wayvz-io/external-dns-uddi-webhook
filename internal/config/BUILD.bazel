@@ -1,0 +1,23 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "config",
+    srcs = ["config.go"],
+    importpath = "github.com/wayvz-io/external-dns-uddi-webhook/internal/config",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "@com_github_caarlos0_env_v11//:env",
+        "@io_k8s_sigs_external_dns//endpoint",
+    ],
+)
+
+go_test(
+    name = "config_test",
+    size = "small",
+    srcs = ["config_test.go"],
+    embed = [":config"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

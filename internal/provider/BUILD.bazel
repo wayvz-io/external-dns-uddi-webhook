@@ -1,0 +1,40 @@
+load("@rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "provider",
+    srcs = [
+        "metrics.go",
+        "provider.go",
+        "rdata.go",
+        "zones.go",
+    ],
+    importpath = "github.com/wayvz-io/external-dns-uddi-webhook/internal/provider",
+    visibility = ["//:__subpackages__"],
+    deps = [
+        "//internal/uddi",
+        "@com_github_prometheus_client_golang//prometheus",
+        "@com_github_prometheus_client_golang//prometheus/promauto",
+        "@io_k8s_sigs_external_dns//endpoint",
+        "@io_k8s_sigs_external_dns//plan",
+        "@io_k8s_sigs_external_dns//provider",
+    ],
+)
+
+go_test(
+    name = "provider_test",
+    size = "small",
+    srcs = [
+        "provider_test.go",
+        "rdata_test.go",
+        "zones_test.go",
+    ],
+    embed = [":provider"],
+    deps = [
+        "//internal/uddi",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+        "@io_k8s_sigs_external_dns//endpoint",
+        "@io_k8s_sigs_external_dns//plan",
+        "@io_k8s_sigs_external_dns//provider",
+    ],
+)
