@@ -3,6 +3,11 @@ name: release-please
 # Conventional commits on main -> release-please maintains a release PR
 # (CHANGELOG + version bump). Merging that PR creates the `vX.Y.Z` tag and the
 # GitHub release stub, and the tag triggers release.yml (image push).
+#
+# The tag is pushed with a GitHub App token, not GITHUB_TOKEN: events created
+# with GITHUB_TOKEN never trigger other workflows, so release.yml would not fire
+# on the tag. The same org App is what nix-rorychatterton's autoupdate uses; its
+# id/key are org secrets granted to this repo.
 on:
   push:
     branches:
@@ -14,11 +19,16 @@ permissions:
 jobs:
   release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
+      - name: Generate App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.AUTOUPDATE_APP_ID }}
+          private-key: ${{ secrets.AUTOUPDATE_APP_PRIVATE_KEY }}
+
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          release-type: go
-          include-v-in-tag: true
+          token: ${{ steps.app-token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
