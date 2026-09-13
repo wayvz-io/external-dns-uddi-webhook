@@ -174,22 +174,24 @@ needs `bazelModDeps` in the Renovate CE server's `allowedUnsafeExecutions`.
       `sonar-project.properties`), generate a project analysis token.
 - [ ] GitHub repo secrets: `SONAR_HOST_URL` (`https://sonarqube.lab.wayvz.io`)
       and `SONAR_HOST_TOKEN`.
-- [ ] Renovate CE: add `wayvz-io/external-dns-uddi-webhook` to
-      `MEND_RNV_AUTODISCOVER_FILTER` in
-      `iac/clusters/k3s-office/renovate/renovate-helmrelease.yaml`; make sure
-      `bazelModDeps` is in `allowedUnsafeExecutions` and bazelisk is in the image.
-- [ ] GitHub App installs: grant the Renovate app and the ARC runner app access
-      to the repo (runners `bb-ci-worker`, `runner-nix-amd64` must be visible).
-- [ ] Branch ruleset on `main`: require PR, require status check `Test (RBE)`,
-      allow release-please's bot to open PRs; enable auto-merge if desired.
+- [x] Renovate CE: repo added to `MEND_RNV_AUTODISCOVER_FILTER` (iac PR #540).
+      Still to check: `bazelModDeps` in `allowedUnsafeExecutions` and bazelisk
+      in the Renovate image, or `MODULE.bazel.lock` refreshes will be skipped.
+- [x] GitHub App installs: Renovate, SonarQube and ARC apps are installed on
+      all org repos; nothing to grant.
+- [x] Rulesets on `main`: signed commits + wayvz.io author/committer emails
+      (all branches), and deletion/force-push protection + required status
+      check `Test (RBE)` on the default branch.
+- [x] Org secrets `AUTOUPDATE_APP_ID` / `AUTOUPDATE_APP_PRIVATE_KEY` granted to
+      the repo (release-please pushes tags with that App token).
 - [ ] Infoblox Portal: mint a least-privilege API key (DNS data read/write on
       view `wayvz-internal` only), store it in Vault; wire the
       `VaultStaticSecret` path/role in iac.
 - [ ] Infoblox Portal: create auth zone `k3s.lab.wayvz.io` (primary type
       `cloud`) in view `wayvz-internal`, served by `niosx1`.
 - [ ] iac `dns-lab` workspace: parent-zone CNAMEs -> `*.k3s.lab.wayvz.io`.
-- [ ] First push: `bazel run //:gazelle`, `bazel mod tidy`, `bazel test //...`,
-      open PR, let CI go green, merge; confirm release-please opens its PR.
+- [x] First push: gazelle, `bazel mod tidy`, `bazel test //...` (RBE and
+      local) green; `MODULE.bazel.lock` committed; release-please opened PR #1.
 - [ ] Packages: make the ghcr package visible to the cluster's pull secret
       (private by default for a private repo).
 
