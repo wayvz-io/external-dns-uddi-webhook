@@ -25,6 +25,8 @@ Image: `ghcr.io/wayvz-io/external-dns-uddi-webhook` (tags `vX.Y.Z`, `vX.Y`, `lat
 
 Record types: A, AAAA, CNAME, TXT, SRV, MX, NS. Records are tagged
 `external-dns=true` in the Portal; ownership is the ExternalDNS TXT registry.
+An explicit TTL (annotation or `UDDI_DEFAULT_TTL`) is written as an override of
+the zone default; without one the record inherits it.
 
 ## Deploy with the upstream Helm chart
 
