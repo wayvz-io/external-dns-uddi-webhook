@@ -24,7 +24,7 @@
             bazel-buildtools # buildifier
             bazel-gazelle
 
-            # Go (Bazel provides the build toolchain; these are for editors/CodeQL parity)
+            # Go (Bazel provides the build toolchain; these are for editor tooling)
             go
             gopls
             golangci-lint
