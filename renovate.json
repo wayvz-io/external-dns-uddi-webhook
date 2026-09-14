@@ -16,7 +16,9 @@
   "minimumReleaseAge": "3 days",
   "vulnerabilityAlerts": {
     "minimumReleaseAge": null,
-    "labels": ["security"]
+    "labels": [
+      "security"
+    ]
   },
   "ignorePaths": [
     ".claude/**",
@@ -31,47 +33,88 @@
   "packageRules": [
     {
       "description": "Enable updates for indirect (transitive) Go deps. Renovate disables these by default (the gomod parser sets enabled=false on any `// indirect` line), and osvVulnerabilityAlerts only covers DIRECT deps - so transitive CVEs (e.g. golang.org/x/net GHSA) would never be fixed. Importing sigs.k8s.io/external-dns drags in a large indirect block (k8s client-go, cloud SDKs), which is exactly where those land; the churn folds into the auto-merging group:allNonMajor bulk PR.",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["indirect"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
       "enabled": true
     },
     {
       "description": "...but never MAJOR bumps of indirect deps. A transitive module's major is chosen by whoever imports it (e.g. client-go picks structured-merge-diff/v6); bumping the `// indirect` line to /v7 adds a module path nothing imports and, for path-versioned majors, drops the one that is (see rules_tf2 go-textseg PR #101). Majors arrive when the direct importer moves.",
-      "matchManagers": ["gomod"],
-      "matchDepTypes": ["indirect"],
-      "matchUpdateTypes": ["major"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchDepTypes": [
+        "indirect"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "Digest/pin updates carry no semver risk (same tag, just a resolved hash), so automerge them alongside the existing :automergeMinor coverage of minor/patch.",
-      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "matchUpdateTypes": [
+        "digest",
+        "pin",
+        "pinDigest"
+      ],
       "automerge": true
     },
     {
       "description": "sigs.k8s.io/external-dns defines the webhook/provider contract we implement. Never apply majors automatically, and hold minors/patches out of the bulk PR with automerge OFF: upstream minors have changed provider semantics (DomainFilter JSON, AdjustEndpoints, registry TXT format) and need a human to read the release notes.",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["sigs.k8s.io/external-dns"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "sigs.k8s.io/external-dns"
+      ],
       "groupName": "external-dns",
       "automerge": false
     },
     {
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["sigs.k8s.io/external-dns"],
-      "matchUpdateTypes": ["major"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "sigs.k8s.io/external-dns"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "enabled": false
     },
     {
       "description": "The Infoblox Universal DDI SDK is pre-1.0 (v0.x) and its generated models/field names have shifted between minors. Isolate it in its own PR so the diff is reviewable against the provider's rdata mapping; CI (mocked client) is not enough to prove compatibility with the live Portal API.",
-      "matchManagers": ["gomod"],
-      "matchPackageNames": ["github.com/infobloxopen/universal-ddi-go-client"],
+      "matchManagers": [
+        "gomod"
+      ],
+      "matchPackageNames": [
+        "github.com/infobloxopen/universal-ddi-go-client"
+      ],
       "groupName": "universal-ddi-go-client",
       "automerge": false
     },
     {
       "description": "The distroless base image is digest-pinned in MODULE.bazel (oci.pull). Keep digest bumps in the bulk PR but tag them so they are easy to spot.",
-      "matchManagers": ["bazel-module"],
-      "matchDatasources": ["docker"],
-      "addLabels": ["base-image"]
+      "matchManagers": [
+        "bazel-module"
+      ],
+      "matchDatasources": [
+        "docker"
+      ],
+      "addLabels": [
+        "base-image"
+      ]
+    },
+    {
+      "description": "The Bazel version is pinned by the nix devshell (nixpkgs bazel_9) and preinstalled on bb-ci-worker; .bazelversion must match those, so Renovate does not bump it on its own (a bump landed 9.2.0 while nixpkgs had 9.1.1, breaking `nix develop` builds).",
+      "matchManagers": [
+        "bazelisk"
+      ],
+      "enabled": false
     }
   ]
 }

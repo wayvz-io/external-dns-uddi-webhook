@@ -367,6 +367,7 @@ func TestClientCreateUpdateDelete(t *testing.T) {
 	assert.Equal(t, map[string]any{"team": "infra", "external-dns": "true"}, body["tags"], "SDK merges default tags")
 	_, hasZone := body["zone"]
 	assert.False(t, hasZone, "zone is derived from absolute_name_spec + view")
+	assert.Equal(t, map[string]any{"ttl": map[string]any{"action": "override"}}, body["inheritance_sources"], "an explicit TTL must override the zone default or it is stored but never served")
 
 	ttl2 := int64(60)
 	updated, err := c.UpdateRecord(ctx, Record{ID: created.ID, Rdata: map[string]any{"cname": "www2.example.com."}, TTL: &ttl2, Comment: "changed"})
@@ -378,6 +379,7 @@ func TestClientCreateUpdateDelete(t *testing.T) {
 	require.Len(t, patches, 1)
 	_, hasName := patches[0].Body["absolute_name_spec"]
 	assert.False(t, hasName, "immutable fields are not patched")
+	assert.Equal(t, map[string]any{"ttl": map[string]any{"action": "override"}}, patches[0].Body["inheritance_sources"])
 	_, hasView := patches[0].Body["view"]
 	assert.False(t, hasView)
 
@@ -480,4 +482,25 @@ func TestTypeFilter(t *testing.T) {
 	assert.Equal(t, "", typeFilter(nil))
 	assert.Equal(t, "(type=='A')", typeFilter([]string{"a"}))
 	assert.Equal(t, "(type=='A' or type=='TXT')", typeFilter([]string{"A", "TXT"}))
+}
+
+func TestClientTTLInheritance(t *testing.T) {
+	p := newPortal()
+	seedPortal(p)
+	c := newTestClient(t, p, Options{})
+	ctx := context.Background()
+
+	created, err := c.CreateRecord(ctx, Record{Name: "nottl.example.com", Type: "A", Rdata: map[string]any{"address": "10.0.0.9"}, ViewID: "dns/view/v1"})
+	require.NoError(t, err)
+	posts := p.requestsTo(http.MethodPost, "/api/ddi/v1/dns/record")
+	require.Len(t, posts, 1)
+	_, hasTTL := posts[0].Body["ttl"]
+	assert.False(t, hasTTL, "no ttl sent when unset")
+	assert.Equal(t, map[string]any{"ttl": map[string]any{"action": "inherit"}}, posts[0].Body["inheritance_sources"])
+
+	_, err = c.UpdateRecord(ctx, Record{ID: created.ID, Rdata: map[string]any{"address": "10.0.0.10"}})
+	require.NoError(t, err)
+	patches := p.requestsTo(http.MethodPatch, "/api/ddi/v1/dns/record/"+strings.TrimPrefix(created.ID, "dns/record/"))
+	require.Len(t, patches, 1)
+	assert.Equal(t, map[string]any{"ttl": map[string]any{"action": "inherit"}}, patches[0].Body["inheritance_sources"], "clearing the TTL hands control back to the zone default")
 }

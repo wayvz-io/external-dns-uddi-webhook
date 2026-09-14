@@ -102,9 +102,13 @@ docs/                                     this plan, development guide, research
 - Does the Portal API key model allow scoping to a single view, or only to
   "DNS data" globally? If global, the `DOMAIN_FILTER` is the only guardrail --
   document that in the deployer's runbook.
-- TTL semantics: UDDI `ttl` is optional (inherits zone default); ExternalDNS
-  sends TTL 0 for "unset". Confirm `AdjustEndpoints` mapping does not create
-  perpetual TTL diffs.
+- TTL semantics (settled 2026-09-14 against a live Portal): a record `ttl` is
+  only served when `inheritance_sources.ttl.action` is `override`; the client
+  sends `override` with an explicit TTL and `inherit` without one. ExternalDNS
+  TTL 0 ("unset") maps to inherit. No perpetual diffs were observed.
+- TXT (settled 2026-09-14): the Portal stores a single quoted string without
+  its quotes. Record keys compare TXT unquoted and `Records` re-quotes, so the
+  registry's quoted form matches on delete/update and the plan stays stable.
 - `oci_image_index` via `platform_transition_filegroup` vs the rules_oci
   `platforms=` attribute: the former is what the other repos use; switch if
   rules_oci marks the latter stable.
