@@ -162,11 +162,12 @@ func (c *APIClient) ListRecords(ctx context.Context, zoneID string) ([]Record, e
 // CreateRecord implements Client.
 func (c *APIClient) CreateRecord(ctx context.Context, rec Record) (Record, error) {
 	body := dnsdata.Record{
-		AbsoluteNameSpec: ptr(rec.Name + "."),
-		View:             ptr(rec.ViewID),
-		Type:             ptr(rec.Type),
-		Rdata:            rec.Rdata,
-		Ttl:              rec.TTL,
+		AbsoluteNameSpec:   ptr(rec.Name + "."),
+		View:               ptr(rec.ViewID),
+		Type:               ptr(rec.Type),
+		Rdata:              rec.Rdata,
+		Ttl:                rec.TTL,
+		InheritanceSources: ttlInheritance(rec.TTL),
 	}
 	if rec.Comment != "" {
 		body.Comment = ptr(rec.Comment)
@@ -191,8 +192,9 @@ func (c *APIClient) UpdateRecord(ctx context.Context, rec Record) (Record, error
 		return Record{}, &Error{Op: "UpdateRecord", StatusCode: http.StatusBadRequest, Err: fmt.Errorf("record id is required")}
 	}
 	body := dnsdata.Record{
-		Rdata: rec.Rdata,
-		Ttl:   rec.TTL,
+		Rdata:              rec.Rdata,
+		Ttl:                rec.TTL,
+		InheritanceSources: ttlInheritance(rec.TTL),
 	}
 	if rec.Comment != "" {
 		body.Comment = ptr(rec.Comment)
@@ -262,3 +264,15 @@ func deref(s *string) string {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// ttlInheritance tells the Portal whether the record's own ttl is in effect.
+// A ttl sent without this is stored but ignored: the served TTL stays the
+// zone/global default (action "inherit"; observed 2026-09-14 on niosx1, 60
+// stored, 28800 served). nil TTL means inherit.
+func ttlInheritance(ttl *int64) *dnsdata.RecordInheritance {
+	action := "inherit"
+	if ttl != nil {
+		action = "override"
+	}
+	return &dnsdata.RecordInheritance{Ttl: &dnsdata.Inheritance2InheritedUInt32{Action: ptr(action)}}
+}
