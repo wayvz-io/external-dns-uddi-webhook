@@ -59,11 +59,12 @@ bb-clientd unix socket). Per-machine overrides go in `.bazelrc.user` (see
    that is empty (an empty report would silently zero Sonar coverage).
 3. Upload artifact `go-coverage`.
 
-`sonar-scan` (push to main / dispatch only, `needs: rbe`, `runner-nix-amd64`)
-downloads the artifact and runs `nix develop --command bazel run --config=local
-//tools/sonar:scan`; the scanner is a JRE-bundled `http_archive`, so no Java in
-the devshell. It authenticates to Vault via GitHub OIDC — no repo secrets are
-needed. SonarQube is the static analysis / quality gate for this repo.
+`sonar-scan` (push to main / dispatch only, `needs: rbe`, also on `bb-ci-worker`)
+downloads the artifact and runs `bazel run --config=local //tools/sonar:scan`;
+the scanner is a JRE-bundled `http_archive`, so no Java or devshell is needed.
+The job exchanges its GitHub OIDC token for a short-lived Vault token (JWT role
+`external-dns-uddi-webhook-ci`) and reads the shared SonarQube user token, so
+the repo holds no secrets. SonarQube is the static analysis / quality gate for this repo.
 
 ### Release flow
 
@@ -86,7 +87,7 @@ semver tag by accident.
 ### Renovate policy
 
 `renovate.json`: `config:recommended` + pinned action digests + `group:allNonMajor`
-+ `:automergeMinor`, dependency dashboard, OSV alerts, `minimumReleaseAge: 3 days`
++ `:automergeMinor` (digest / pin updates automerge too), dependency dashboard, OSV alerts, `minimumReleaseAge: 3 days`
 (waived for vulnerability alerts). Managers: `gomod` (with `gomodTidy`,
 `gomodUpdateImportPaths`, indirect deps enabled because `sigs.k8s.io/external-dns`
 drags in the k8s/cloud SDK tree where CVEs land), `bazel-module` (bazel_dep +
