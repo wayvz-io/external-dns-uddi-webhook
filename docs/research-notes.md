@@ -429,7 +429,7 @@ https://github.com/infobloxopen/universal-ddi-go-client/blob/main/dnsdata/docs/R
 
 ### Live observations (read-only probe, 2026-09-13)
 - IDs: `dns/auth_zone/ae84c3c7-...`, `dns/view/f0e0aca3-...`, `dns/record/004226f0-...`.
-- `fqdn` and `absolute_name_spec` are returned **with trailing dot** (`wayvz.io.`, `_tailscale-challenge.wayvz.io.`);
+- `fqdn` and `absolute_name_spec` are returned **with trailing dot** (`example.com.`, `_tailscale-challenge.example.com.`);
   apex records have `name_in_zone: ""`.
 - CNAME: `rdata: {"cname": "sig1.dkim.rorychatterton.com.at.icloudmailadmin.com."}` (trailing dot preserved).
 - TXT: `rdata: {"text": "v2=r2ia5UC6Mg..."}` and `dns_rdata: "\"v2=r2ia5UC6Mg...\""`. A record stored with

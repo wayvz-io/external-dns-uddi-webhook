@@ -1,5 +1,5 @@
-# EXAMPLE ONLY -- not applied from this repo. The real deployment lives in the
-# iac repo (clusters/k3s-office/external-dns) as a HelmRelease of the upstream
+# EXAMPLE ONLY -- not applied from this repo. The real deployment is expected
+# to live in your GitOps repo, e.g. as a HelmRelease of the upstream
 # external-dns chart with `provider.name: webhook`; see README.md for the values
 # snippet. This kustomization shows the equivalent raw manifests so the wiring
 # (sidecar, env, RBAC, Vault secret) is reviewable in one place.
