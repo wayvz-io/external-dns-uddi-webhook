@@ -32,11 +32,11 @@ spec:
             - --source=ingress
             - --source=gateway-httproute
             - --registry=txt
-            - --txt-owner-id=k3s-office
+            - --txt-owner-id=my-cluster
             # Record-type-aware prefix so registry TXT records never collide
             # with a CNAME of the same name.
             - --txt-prefix=reg-%{record_type}.
-            - --domain-filter=k3s.lab.wayvz.io
+            - --domain-filter=k8s.example.com
             - --policy=sync
             - --interval=1m
             - --log-format=json
@@ -76,9 +76,9 @@ spec:
             - name: INFOBLOX_PORTAL_URL
               value: https://csp.infoblox.com
             - name: UDDI_VIEW
-              value: wayvz-internal
+              value: my-view
             - name: DOMAIN_FILTER
-              value: k3s.lab.wayvz.io
+              value: k8s.example.com
             - name: SERVER_HOST
               value: "127.0.0.1"
             - name: SERVER_PORT

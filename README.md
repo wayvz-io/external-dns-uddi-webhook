@@ -42,18 +42,18 @@ provider:
             name: uddi-api-key
             key: api_key
       - name: UDDI_VIEW
-        value: wayvz-internal
+        value: my-view
       - name: DOMAIN_FILTER
-        value: k3s.lab.wayvz.io
+        value: k8s.example.com
     securityContext:
       runAsNonRoot: true
       readOnlyRootFilesystem: true
       capabilities: { drop: ["ALL"] }
 sources: [service, ingress, gateway-httproute]
 registry: txt
-txtOwnerId: k3s-office
+txtOwnerId: my-cluster
 txtPrefix: "reg-%{record_type}."
-domainFilters: [k3s.lab.wayvz.io]
+domainFilters: [k8s.example.com]
 policy: sync
 interval: 1m
 ```
@@ -63,27 +63,5 @@ The chart already probes `/healthz` on port 8080 of the `webhook` container.
 
 ## Development
 
-```sh
-nix develop                          # bazel 9, buildifier, gazelle, go, gopls, crane, kubectl
-bazel test //...                     # RBE on the lab Buildbarn (Tailscale)
-bazel test --config=local //...      # offline
-bazel run //:gazelle                 # regenerate Go BUILD files
-bazel mod tidy                       # after adding a direct Go dependency
-```
-
-### Bazel targets
-
-| Target | What |
-|---|---|
-| `//cmd/webhook` | the binary (gazelle-generated) |
-| `//:image` | single-arch `oci_image` (distroless static, `nonroot`) |
-| `//:image_index` | linux/amd64 + linux/arm64 index |
-| `//:load` | `bazel run` -> local podman/docker image `...:dev` |
-| `//:push` | push `//:image_index` to ghcr with tags from `//:image_tags` (use `--stamp --workspace_status_command=tools/workspace-status.sh`) |
-| `//:image_tags` | stamped tag list (`latest`, `vX.Y.Z`, `vX.Y`) |
-| `//:gazelle`, `//:buildifier_check`, `//:buildifier_test` | codegen / lint |
-| `//tools/sonar:scan` | hermetic sonar-scanner (`scripts/sonar-scan.sh` wraps it) |
-
-CI runs `bazel coverage` on the in-cluster RBE runner and feeds Sonar on `main`;
-releases come from release-please (conventional commits) -> `v*` tag -> image
-push + GitHub release. Details: `docs/PLAN.md`.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building, testing, and
+releasing this project.
