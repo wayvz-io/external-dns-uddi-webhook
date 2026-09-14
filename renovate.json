@@ -36,6 +36,13 @@
       "enabled": true
     },
     {
+      "description": "...but never MAJOR bumps of indirect deps. A transitive module's major is chosen by whoever imports it (e.g. client-go picks structured-merge-diff/v6); bumping the `// indirect` line to /v7 adds a module path nothing imports and, for path-versioned majors, drops the one that is (see rules_tf2 go-textseg PR #101). Majors arrive when the direct importer moves.",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
       "description": "sigs.k8s.io/external-dns defines the webhook/provider contract we implement. Never apply majors automatically, and hold minors/patches out of the bulk PR with automerge OFF: upstream minors have changed provider semantics (DomainFilter JSON, AdjustEndpoints, registry TXT format) and need a human to read the release notes.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["sigs.k8s.io/external-dns"],
