@@ -170,10 +170,12 @@ needs `bazelModDeps` in the Renovate CE server's `allowedUnsafeExecutions`.
 
 ## One-time manual steps
 
-- [ ] SonarQube: create project `external-dns-uddi-webhook` (key must match
-      `sonar-project.properties`), generate a project analysis token.
-- [ ] GitHub repo secrets: `SONAR_HOST_URL` (`https://sonarqube.lab.wayvz.io`)
-      and `SONAR_HOST_TOKEN`.
+- [x] SonarQube: project `external-dns-uddi-webhook` exists.
+- [x] Sonar credentials: no repo secrets. The post-merge scan runs on
+      `bb-ci-worker`, logs in to Vault with its GitHub OIDC token (JWT role
+      `external-dns-uddi-webhook-ci`, iac `vault-config`) and reads the shared
+      `kv/sonarqube/default/user-token` leaf. The host URL is the in-cluster
+      Service and is not secret.
 - [x] Renovate CE: repo added to `MEND_RNV_AUTODISCOVER_FILTER` (iac PR #540).
       Still to check: `bazelModDeps` in `allowedUnsafeExecutions` and bazelisk
       in the Renovate image, or `MODULE.bazel.lock` refreshes will be skipped.
