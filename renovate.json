@@ -43,6 +43,11 @@
       "enabled": false
     },
     {
+      "description": "Digest/pin updates carry no semver risk (same tag, just a resolved hash), so automerge them alongside the existing :automergeMinor coverage of minor/patch.",
+      "matchUpdateTypes": ["digest", "pin", "pinDigest"],
+      "automerge": true
+    },
+    {
       "description": "sigs.k8s.io/external-dns defines the webhook/provider contract we implement. Never apply majors automatically, and hold minors/patches out of the bulk PR with automerge OFF: upstream minors have changed provider semantics (DomainFilter JSON, AdjustEndpoints, registry TXT format) and need a human to read the release notes.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["sigs.k8s.io/external-dns"],
