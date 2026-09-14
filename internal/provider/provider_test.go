@@ -560,3 +560,66 @@ func fmtRdata(m map[string]any) string {
 	b, _ := json.Marshal(m)
 	return string(b)
 }
+
+// The live Portal stores a single-string TXT without the quotes it was
+// written with. Records must hand the quoted form back (so the plan is
+// stable) and deletes/updates carrying the quoted registry form must still
+// find the record.
+func TestTXTQuotingRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	const quoted = `"heritage=external-dns,external-dns/owner=k8s"`
+	const stored = `heritage=external-dns,external-dns/owner=k8s`
+
+	t.Run("Records re-quotes stored text", func(t *testing.T) {
+		h := newHarness(t, nil)
+		h.fake.AddRecord(uddi.Record{Name: "a-www.example.com", Type: "TXT", Rdata: map[string]any{"text": stored}, ZoneID: zone1})
+		eps, err := h.prov.Records(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, endpoint.Targets{quoted}, findEndpoint(eps, "a-www.example.com", "TXT").Targets)
+	})
+
+	t.Run("delete with quoted target finds unquoted record", func(t *testing.T) {
+		h := newHarness(t, nil)
+		h.fake.AddRecord(uddi.Record{Name: "a-www.example.com", Type: "TXT", Rdata: map[string]any{"text": stored}, ZoneID: zone1})
+		_, err := h.prov.Records(ctx)
+		require.NoError(t, err)
+		err = h.prov.ApplyChanges(ctx, &plan.Changes{Delete: []*endpoint.Endpoint{
+			endpoint.NewEndpoint("a-www.example.com", "TXT", quoted),
+		}})
+		require.NoError(t, err)
+		assert.Len(t, h.fake.CallsTo("DeleteRecord"), 1)
+		assert.NotContains(t, h.logs.String(), "treating as already deleted")
+	})
+
+	t.Run("delete with unquoted target also matches after a quoted create", func(t *testing.T) {
+		h := newHarness(t, nil)
+		err := h.prov.ApplyChanges(ctx, &plan.Changes{Create: []*endpoint.Endpoint{
+			endpoint.NewEndpoint("a-www.example.com", "TXT", quoted),
+		}})
+		require.NoError(t, err)
+		err = h.prov.ApplyChanges(ctx, &plan.Changes{Delete: []*endpoint.Endpoint{
+			endpoint.NewEndpoint("a-www.example.com", "TXT", stored),
+		}})
+		require.NoError(t, err)
+		assert.Len(t, h.fake.CallsTo("DeleteRecord"), 1)
+		assert.Empty(t, h.fake.CallsTo("ListRecords"), "index hit, no refresh")
+	})
+
+	t.Run("update with quoted old target retunes in place", func(t *testing.T) {
+		h := newHarness(t, nil)
+		h.fake.AddRecord(uddi.Record{Name: "a-www.example.com", Type: "TXT", Rdata: map[string]any{"text": stored}, ZoneID: zone1})
+		_, err := h.prov.Records(ctx)
+		require.NoError(t, err)
+		old := endpoint.NewEndpointWithTTL("a-www.example.com", "TXT", 0, quoted)
+		upd := endpoint.NewEndpointWithTTL("a-www.example.com", "TXT", 120, quoted)
+		err = h.prov.ApplyChanges(ctx, &plan.Changes{UpdateOld: []*endpoint.Endpoint{old}, UpdateNew: []*endpoint.Endpoint{upd}})
+		require.NoError(t, err)
+		assert.Len(t, h.fake.CallsTo("UpdateRecord"), 1)
+		assert.Empty(t, h.fake.CallsTo("CreateRecord"), "no duplicate TXT created")
+	})
+}
+
+func TestKeyOfTXTCanonical(t *testing.T) {
+	assert.Equal(t, keyOf("x.example.com", "TXT", `"abc"`), keyOf("X.example.com.", "TXT", "abc"))
+	assert.NotEqual(t, keyOf("x.example.com", "A", `"abc"`), keyOf("x.example.com", "A", "abc"), "only TXT is unquoted")
+}

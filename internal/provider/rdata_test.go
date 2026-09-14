@@ -135,3 +135,15 @@ func TestSupportedType(t *testing.T) {
 	assert.False(t, supportedType("SOA"))
 	assert.False(t, supportedType("PTR"))
 }
+
+func TestUnquoteTXT(t *testing.T) {
+	assert.Equal(t, "abc", unquoteTXT(`"abc"`))
+	assert.Equal(t, "abc", unquoteTXT("abc"))
+	assert.Equal(t, `say "hi"`, unquoteTXT(`"say \"hi\""`))
+	assert.Equal(t, "", unquoteTXT(`""`))
+	assert.Equal(t, `"a" "b"`, unquoteTXT(`"a" "b"`), "multi-string stays as is")
+	assert.Equal(t, `a\"`, unquoteTXT(`a\"`))
+	for _, s := range []string{"abc", "v=spf1 -all", `say "hi"`, ""} {
+		assert.Equal(t, s, unquoteTXT(quoteTXT(s)), "round trip %q", s)
+	}
+}

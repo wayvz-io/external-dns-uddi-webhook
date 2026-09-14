@@ -146,6 +146,12 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 				continue
 			}
 			index[keyOf(name, rec.Type, target)] = indexEntry{id: rec.ID, zoneID: zone.ID}
+			if rec.Type == endpoint.RecordTypeTXT {
+				// The Portal stores a single character-string without its quotes;
+				// hand it back in the quoted form AdjustEndpoints and the TXT
+				// registry produce, or every TXT would plan as an update forever.
+				target = quoteTXT(target)
+			}
 			gk := keyOf(name, rec.Type, "")
 			ep, ok := groups[gk]
 			if !ok {
@@ -482,7 +488,13 @@ func (p *Provider) apiErr(err error) error {
 	return err
 }
 
+// keyOf identifies one (name, type, target) record. TXT targets are keyed in
+// their unquoted form: the Portal returns the text without the quotes the
+// registry sent, and a delete or update for that record arrives quoted.
 func keyOf(name, typ, target string) recordKey {
+	if typ == endpoint.RecordTypeTXT {
+		target = unquoteTXT(target)
+	}
 	return recordKey{name: strings.ToLower(strings.TrimSuffix(name, ".")), typ: typ, target: target}
 }
 
