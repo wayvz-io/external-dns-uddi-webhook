@@ -3,7 +3,8 @@
 # (//tools/sonar:scan). This script is the credential front-end only.
 # Same entrypoint for CI and local:
 #   - CI:    SONAR_HOST_URL + SONAR_TOKEN come from the environment (GH Actions
-#            maps SONAR_TOKEN <- secrets.SONAR_HOST_TOKEN).
+#            maps SONAR_TOKEN <- Vault kv/sonarqube/default/user-token via
+#            the GitHub OIDC JWT role; the host URL is the in-cluster Service).
 #   - Local: falls back to 1Password (op://k8s-dev/sonarqube/{website,user-token}).
 # Hard-errors loudly if neither resolves -- no silent fallback.
 #
