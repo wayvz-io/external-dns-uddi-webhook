@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.2](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.1.1...v0.1.2) (2026-09-15)
+
+
+### Features
+
+* **config:** implement UDDI_ZONE_FILTER ([a8466c1](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/a8466c14457cede799b3a57dca7fb07a7c8f253d))
+* **config:** implement UDDI_ZONE_FILTER ([b208ddf](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/b208ddf3ed1244918673399304404499b9972584))
+
 ## [0.1.1](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.1.0...v0.1.1) (2026-09-14)
 
 
