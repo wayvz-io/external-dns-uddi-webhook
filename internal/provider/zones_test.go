@@ -92,3 +92,32 @@ func TestZoneCacheZeroTTLAlwaysRefreshes(t *testing.T) {
 	_, _ = c.get(context.Background())
 	assert.Len(t, fake.CallsTo("ListZones"), 2)
 }
+
+func TestZoneSet(t *testing.T) {
+	assert.Nil(t, zoneSet(nil), "empty filter means no restriction")
+	assert.Nil(t, zoneSet([]string{"", "  "}), "blank entries are not a restriction")
+	assert.Equal(t, map[string]bool{"lab.example.com": true}, zoneSet([]string{" Lab.Example.com. "}),
+		"trailing dot, case and padding are normalised")
+	assert.Equal(t, map[string]bool{"a.example.com": true, "b.example.com": true},
+		zoneSet([]string{"a.example.com", "b.example.com."}))
+}
+
+func TestZoneCacheOnlyFilter(t *testing.T) {
+	ctx := context.Background()
+	f := uddi.NewFake()
+	f.AddZone(uddi.Zone{ID: "dns/auth_zone/z1", FQDN: "example.com", ViewID: "dns/view/v1"})
+	f.AddZone(uddi.Zone{ID: "dns/auth_zone/z2", FQDN: "lab.example.com", ViewID: "dns/view/v1"})
+
+	filter := endpoint.NewDomainFilter([]string{"lab.example.com"})
+	c := &zoneCache{client: f, viewID: "dns/view/v1", filter: filter, ttl: time.Minute, now: time.Now}
+	all, err := c.get(ctx)
+	require.NoError(t, err)
+	assert.Len(t, all, 2, "the parent zone is kept so a sub-domain filter can still be hosted")
+
+	c2 := &zoneCache{client: f, viewID: "dns/view/v1", filter: filter,
+		only: zoneSet([]string{"lab.example.com"}), ttl: time.Minute, now: time.Now}
+	got, err := c2.get(ctx)
+	require.NoError(t, err)
+	require.Len(t, got, 1, "the zone filter excludes the parent")
+	assert.Equal(t, "lab.example.com", got[0].FQDN)
+}

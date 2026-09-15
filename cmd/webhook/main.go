@@ -57,6 +57,7 @@ func run(ctx context.Context, environ map[string]string, out io.Writer) error {
 		DefaultTTL:    cfg.DefaultTTL,
 		RecordComment: cfg.RecordComment,
 		Tags:          tags,
+		ZoneFilter:    cfg.ZoneFilter,
 		ZoneCacheTTL:  cfg.ZoneCacheTTL,
 		Logger:        logger,
 	})

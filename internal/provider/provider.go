@@ -32,7 +32,10 @@ type Config struct {
 	RecordComment string
 	Tags          map[string]string
 	ZoneCacheTTL  time.Duration
-	Logger        *slog.Logger
+	// ZoneFilter optionally restricts the managed zones by FQDN; empty means no
+	// restriction beyond the domain filter.
+	ZoneFilter []string
+	Logger     *slog.Logger
 	// Now overrides the clock (tests).
 	Now func() time.Time
 }
@@ -98,6 +101,7 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 			client: cfg.Client,
 			viewID: viewID,
 			filter: cfg.DomainFilter,
+			only:   zoneSet(cfg.ZoneFilter),
 			ttl:    cfg.ZoneCacheTTL,
 			now:    cfg.Now,
 		},

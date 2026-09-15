@@ -16,8 +16,11 @@ type zoneCache struct {
 	client uddi.Client
 	viewID string
 	filter *endpoint.DomainFilter
-	ttl    time.Duration
-	now    func() time.Time
+	// only, when non-empty, is the set of zone FQDNs (no trailing dot,
+	// lowercase) this cache is allowed to return.
+	only map[string]bool
+	ttl  time.Duration
+	now  func() time.Time
 
 	mu     sync.Mutex
 	zones  []uddi.Zone
@@ -39,7 +42,12 @@ func (c *zoneCache) get(ctx context.Context) ([]uddi.Zone, error) {
 		if z.FQDN == "" {
 			continue
 		}
-		// Keep zones that are themselves in scope or are parents of a
+		// An explicit zone filter is absolute: it names the zones this provider
+		// may touch, so anything outside it is never listed or written.
+		if c.only != nil && !c.only[strings.ToLower(strings.TrimSuffix(z.FQDN, "."))] {
+			continue
+		}
+		// Otherwise keep zones that are themselves in scope or are parents of a
 		// configured filter (e.g. filter "sub.example.com", zone "example.com").
 		if c.filter.Match(z.FQDN) || c.filter.MatchParent(z.FQDN) {
 			zones = append(zones, z)
@@ -71,4 +79,21 @@ func findZone(zones []uddi.Zone, name string) (uddi.Zone, bool) {
 		}
 	}
 	return best, found
+}
+
+// zoneSet normalises a zone filter into a lookup set, or nil when empty.
+// Entries are compared without a trailing dot and case-insensitively, so
+// "Lab.Example.com." and "lab.example.com" are the same zone.
+func zoneSet(fqdns []string) map[string]bool {
+	set := map[string]bool{}
+	for _, f := range fqdns {
+		f = strings.ToLower(strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(f), ".")))
+		if f != "" {
+			set[f] = true
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return set
 }
