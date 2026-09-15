@@ -43,7 +43,10 @@ type Config struct {
 	PortalURL string `env:"INFOBLOX_PORTAL_URL" envDefault:"https://csp.infoblox.com"`
 
 	// View is the DNS view *name*; it is resolved to a resource id at startup.
-	View          string        `env:"UDDI_VIEW" envDefault:"default"`
+	View string `env:"UDDI_VIEW" envDefault:"default"`
+	// ZoneFilter optionally restricts which auth zones are managed, by FQDN.
+	// Empty means every zone in the view that the domain filter allows.
+	ZoneFilter    []string      `env:"UDDI_ZONE_FILTER"`
 	ZoneCacheTTL  time.Duration `env:"UDDI_ZONE_CACHE_TTL" envDefault:"5m"`
 	PageLimit     int           `env:"UDDI_PAGE_LIMIT" envDefault:"1000"`
 	DefaultTTL    int64         `env:"UDDI_DEFAULT_TTL" envDefault:"0"`

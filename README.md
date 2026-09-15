@@ -14,7 +14,7 @@ Image: `ghcr.io/wayvz-io/external-dns-uddi-webhook` (tags `vX.Y.Z`, `vX.Y`, `lat
 | `INFOBLOX_PORTAL_KEY` | required | Portal API key (DNS data read/write on the view) |
 | `INFOBLOX_PORTAL_URL` | `https://csp.infoblox.com` | Portal base URL |
 | `UDDI_VIEW` | required | DNS view **name**; resolved to its id at startup |
-| `UDDI_ZONE_FILTER` | | Optional comma list restricting which auth zones are managed |
+| `UDDI_ZONE_FILTER` | | Optional comma list of zone FQDNs; when set, only these zones are listed or written |
 | `DOMAIN_FILTER` | | Comma list of domains; also returned to external-dns on `GET /` |
 | `EXCLUDE_DOMAIN_FILTER` | | Domains to exclude |
 | `REGEXP_DOMAIN_FILTER` / `REGEXP_DOMAIN_FILTER_EXCLUSION` | | Regex variants |
