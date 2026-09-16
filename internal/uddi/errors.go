@@ -10,10 +10,9 @@ import (
 // ErrNotFound is returned when a looked-up object does not exist.
 var ErrNotFound = errors.New("not found")
 
-// Error is an API call failure annotated with enough context to decide
-// whether a retry is worthwhile.
+// Error describes an API failure and whether the caller can retry it.
 type Error struct {
-	// Op names the failed operation, e.g. "ListZones".
+	// Op names the failed operation, for example "ListZones".
 	Op string
 	// StatusCode is the HTTP status, or 0 when no response was received.
 	StatusCode int
@@ -32,7 +31,7 @@ func (e *Error) Error() string {
 func (e *Error) Unwrap() error { return e.Err }
 
 // Retryable reports whether the failure is transient. Network errors, 5xx
-// responses and 429 are retryable; other 4xx responses are not.
+// responses, and 429 responses are retryable. Other 4xx responses are not.
 func (e *Error) Retryable() bool {
 	if errors.Is(e.Err, context.Canceled) {
 		return false
@@ -48,8 +47,8 @@ func (e *Error) Retryable() bool {
 	return false
 }
 
-// IsRetryable reports whether err (or anything it wraps) is a retryable
-// *Error. Unknown errors are treated as retryable so callers fail open.
+// IsRetryable reports whether err wraps a retryable Error. It treats unknown
+// errors as retryable.
 func IsRetryable(err error) bool {
 	var e *Error
 	if errors.As(err, &e) {

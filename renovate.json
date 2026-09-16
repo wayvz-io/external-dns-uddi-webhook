@@ -87,7 +87,7 @@
       "enabled": false
     },
     {
-      "description": "The Infoblox Universal DDI SDK is pre-1.0 (v0.x) and its generated models/field names have shifted between minors. Isolate it in its own PR so the diff is reviewable against the provider's rdata mapping; CI (mocked client) is not enough to prove compatibility with the live Portal API.",
+      "description": "Put Universal DDI SDK updates in a separate PR. Its generated fields can change between minor releases, and mocked tests cannot prove compatibility with the Portal API.",
       "matchManagers": [
         "gomod"
       ],
@@ -98,7 +98,7 @@
       "automerge": false
     },
     {
-      "description": "The distroless base image is digest-pinned in MODULE.bazel (oci.pull). Keep digest bumps in the bulk PR but tag them so they are easy to spot.",
+      "description": "Label distroless digest updates in the grouped dependency PR.",
       "matchManagers": [
         "bazel-module"
       ],

@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
-# Merge the per-test Go coverprofiles that `bazel coverage //...` writes
-# (cover_format=go_cover, see .bazelrc) into ONE file for SonarQube:
+# Merge the Go profiles from `bazel coverage //...` for SonarQube.
 #
 #   target/sonar/go-coverage.out   (sonar.go.coverage.reportPaths)
 #
-# Go coverprofiles are line-oriented: a single `mode:` header followed by
-# `file:startline.col,endline.col numstmts count` records, so concatenation with
-# one header is a valid merged profile (duplicates for the same block across
-# tests are summed by consumers in `count` mode and OR'd in `set` mode).
+# A Go coverage profile has one `mode:` header followed by coverage records.
+# The merged file keeps one header and concatenates the records.
 #
 # Usage: scripts/merge-go-coverage.sh [testlogs-dir] [out-file]
 set -euo pipefail
@@ -28,7 +25,7 @@ mapfile -t files < <(find "$testlogs" -name coverage.dat -type f -size +0 2>/dev
 
 mkdir -p "$(dirname "$out")"
 if [[ ${#files[@]} -eq 0 ]]; then
-  echo "error: no non-empty coverage.dat under $testlogs -- did 'bazel coverage //...' run?" >&2
+  echo "error: no non-empty coverage.dat under $testlogs; run 'bazel coverage //...' first" >&2
   exit 1
 fi
 
@@ -40,15 +37,13 @@ fi
 
 mode="$(grep -h -m1 '^mode:' "${files[@]}" | head -n1)"
 if [[ -z "$mode" ]]; then
-  echo "error: coverage.dat files carry no 'mode:' header -- is cover_format=go_cover set (see .bazelrc)?" >&2
+  echo "error: coverage.dat files have no 'mode:' header; check cover_format in .bazelrc" >&2
   exit 1
 fi
 
 {
   echo "$mode"
-  # Keep only this module's files: rules_go's go_cover profiles also carry blocks
-  # for instrumented external packages, which Sonar cannot map and which bloat
-  # the report ~100x.
+  # Drop external-package blocks because Sonar cannot map them to this module.
   for f in "${files[@]}"; do
     grep "^${module}/" "$f" || true
   done

@@ -1,4 +1,4 @@
-# Local Bazel overrides -- copy to `.bazelrc.user` (gitignored) and edit.
+# Copy this file to the ignored `.bazelrc.user` file and edit it.
 #
 # `.bazelrc` try-imports `.bazelrc.user` last, so anything here wins over the
 # committed config. The committed defaults already point at the lab Buildbarn

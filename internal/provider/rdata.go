@@ -68,8 +68,8 @@ func rdataAAAA(target string) (map[string]any, error) {
 	return map[string]any{"address": addr.String()}, nil
 }
 
-// rdataName builds the rdata for a name-valued record (CNAME/NS): label is
-// used in the error message, field is the UDDI rdata key.
+// rdataName builds rdata for a CNAME or NS record. label identifies errors,
+// and field is the UDDI rdata key.
 func rdataName(label, field, target string) (map[string]any, error) {
 	if target == "" {
 		return nil, fmt.Errorf("%s target must not be empty", label)
@@ -209,9 +209,7 @@ func unfqdn(name string) string {
 	return strings.TrimSuffix(name, ".")
 }
 
-// quoteTXT wraps a TXT value in double quotes unless it already is, so UDDI
-// stores it as a single character-string. This is the form external-dns's
-// TXT registry already produces, so Records and the plan agree.
+// quoteTXT wraps an unquoted TXT value so UDDI stores one character-string.
 func quoteTXT(s string) string {
 	if len(s) >= 2 && strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) && !strings.HasSuffix(s, `\"`) {
 		return s
@@ -219,18 +217,14 @@ func quoteTXT(s string) string {
 	return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
 }
 
-// unquoteTXT is the inverse of quoteTXT: a value wrapped in one pair of double
-// quotes is returned without them and with `\"` unescaped; anything else is
-// returned unchanged. Record keys use this form so a quoted target from
-// external-dns's TXT registry matches the unquoted text the Portal stores
-// (it drops the quotes of a single character-string on write).
+// unquoteTXT removes one pair of double quotes and unescapes `\"`. It leaves
+// other values unchanged. This form matches the text stored by the Portal.
 func unquoteTXT(s string) string {
 	if len(s) < 2 || !strings.HasPrefix(s, `"`) || !strings.HasSuffix(s, `"`) || strings.HasSuffix(s, `\"`) {
 		return s
 	}
 	inner := s[1 : len(s)-1]
-	// A bare quote inside means several character-strings (`"a" "b"`), not one
-	// quoted value; leave those alone.
+	// An inner bare quote separates character-strings, so preserve the value.
 	for i := 0; i < len(inner); i++ {
 		if inner[i] == `"`[0] && (i == 0 || inner[i-1] != `\\`[0]) {
 			return s

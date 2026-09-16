@@ -1,8 +1,7 @@
-# EXAMPLE ONLY -- not applied from this repo. The real deployment is expected
-# to live in your GitOps repo, e.g. as a HelmRelease of the upstream
-# external-dns chart with `provider.name: webhook`; see README.md for the values
-# snippet. This kustomization shows the equivalent raw manifests so the wiring
-# (sidecar, env, RBAC, Vault secret) is reviewable in one place.
+# This example is not applied from this repository. Keep the deployment in your
+# GitOps repository, such as a HelmRelease of the upstream ExternalDNS chart.
+# README.md contains the chart values. These manifests show the equivalent
+# sidecar, environment, RBAC, and Vault configuration.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 

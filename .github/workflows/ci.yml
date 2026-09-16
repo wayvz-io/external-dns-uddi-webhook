@@ -16,52 +16,33 @@ permissions:
   contents: read
 
 jobs:
-  # RBE mode: executed remotely on the lab Buildbarn cluster, driven by our
-  # self-hosted ARC runner (`bb-ci-worker`) which runs *inside* the cluster with
-  # Bazel 9.1.1 + bb-clientd preinstalled. Because the runner is in-cluster it
-  # reaches Buildbarn directly over plain gRPC via Kubernetes Service DNS -- no
-  # Tailscale, no gateway, no TLS. The runner + endpoints are defined in the iac
-  # repo (clusters/k3s-office/github-actions-runner + buildbarn).
+  # The bb-ci-worker ARC runner submits remote actions to the lab Buildbarn
+  # cluster. It has Bazel 9.1.1 and bb-clientd installed. The runner reaches
+  # Buildbarn through Kubernetes Service DNS and plain gRPC. The infrastructure
+  # repository defines the runner and endpoints.
   #
-  # This job is the required status check in the branch ruleset -- keep the
-  # `name:` stable.
+  # The branch ruleset requires this job, so keep its name stable.
   rbe:
     name: Test (RBE)
-    # This runs on a self-hosted runner inside the lab cluster with direct
-    # access to Buildbarn. Once the repo is public, a fork PR must not be able
-    # to schedule work on it -- GitHub's repo-level "require approval for
-    # outside collaborators" setting is the primary control, but skip the job
-    # outright for fork PRs too rather than relying on that alone.
+    # Do not let pull requests from forks schedule the self-hosted runner.
+    # GitHub also requires approval for outside collaborators.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: bb-ci-worker
-    # Cap runaway/wedged jobs. Without this GitHub's default is 6h, so a stuck
-    # self-hosted runner blocks the (single) queue slot for hours.
+    # Release the single runner slot if a job stalls.
     timeout-minutes: 30
     env:
       BES_BACKEND: grpc://bb-portal.buildbarn:8082
-      # Human-facing https UI link Bazel prints for the invocation.
+      # Bazel prints this URL for the invocation results.
       BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Coverage build + test on RBE (via bb-clientd)
-        # The runner's job hook starts bb-clientd -- a local caching proxy whose
-        # CAS lives on a persistent PVC (warm across runs). Bazel talks to its
-        # unix socket; clientd forwards to the in-cluster frontend, selected by
-        # --remote_instance_name (its config's cluster key).
-        #
-        # output_user_root ALSO lives on the PVC (/clientd), so the extracted
-        # external repos + analysis cache persist across the ephemeral runner
-        # pods. repository_cache stays on the PVC too.
-        #
-        # `bazel coverage` == `bazel test --collect_code_coverage`: one
-        # instrumented pass builds everything, runs every test AND emits a Go
-        # coverprofile per test (cover_format=go_cover, see .bazelrc). Sonar's Go
-        # analyzer reads native coverprofiles, not lcov, so there is no lcov
-        # merge step; scripts/merge-go-coverage.sh concatenates them instead.
-        #
-        # Transient RBE/CAS hiccups clear on a plain repeat, so retry once *in
-        # the same step*: staying on this runner pod keeps the warm output base.
+        # The runner starts bb-clientd as a local cache backed by a persistent
+        # volume. The Bazel output root and repository cache use the same volume.
+        # `bazel coverage` builds the project, runs every test, and emits native
+        # Go profiles. The merge script combines those profiles for Sonar.
+        # Retry once on the same runner to retain the cached output.
         run: |
           run_coverage() {
             bazel --output_user_root=/clientd/bazel coverage --config=remote \
@@ -84,12 +65,10 @@ jobs:
           scripts/merge-go-coverage.sh "$testlogs" target/sonar/go-coverage.out
 
       - name: Verify Go coverage report is non-empty
-        # Fail loud: an empty report would silently regress Sonar coverage to ~0.
-        # This does NOT gate merges on coverage CONTENT -- the gate is the
-        # build+test above; this just guards the artifact the scan uses.
+        # Reject an empty artifact because Sonar would otherwise report zero coverage.
         run: |
           if [ ! -s target/sonar/go-coverage.out ] || [ "$(wc -l < target/sonar/go-coverage.out)" -lt 2 ]; then
-            echo "::error::target/sonar/go-coverage.out is empty -- bazel coverage produced nothing."
+            echo "::error::target/sonar/go-coverage.out is empty; bazel coverage produced nothing."
             exit 1
           fi
           echo "go-coverage.out: $(tail -n +2 target/sonar/go-coverage.out | cut -d: -f1 | sort -u | wc -l) source files, $(($(wc -l < target/sonar/go-coverage.out) - 1)) block records"
@@ -103,38 +82,31 @@ jobs:
 
   sonar-scan:
     name: sonar scan
-    # Post-merge (+ dispatch) only -- Sonar tracks main. PRs still get the
-    # instrumented gate above (and upload the artifact), just no scan.
+    # Sonar tracks main, so pull requests build coverage without running a scan.
     if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     needs: rbe
-    # bb-ci-worker rather than the nix runner: it has Bazel preinstalled (the
-    # scanner itself is a hermetic http_archive, so no devshell is needed) and it
-    # mounts the lab CA bundle, which the Vault login below requires.
+    # bb-ci-worker has Bazel and mounts the CA bundle required by Vault.
     runs-on: bb-ci-worker
     timeout-minutes: 20
     permissions:
       contents: read
       id-token: write # mint the GitHub OIDC JWT for the Vault login
     env:
-      # FQDN, not the short svc form: the Vault serving cert's SANs cover only
-      # the FQDN from an in-cluster runner (same as bombora's deploy workflows).
+      # The Vault certificate covers this FQDN, not the short service name.
       VAULT_ADDR: https://vault-active.vault.svc.cluster.local:8200
-      # vault-action runs on Node, which ignores the OS trust store; point it at
-      # the trust-manager bundle the bb-ci-worker pod overlays here.
+      # Node uses this CA bundle for the Vault connection.
       NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
-      # In-cluster Service, not the tailnet hostname. Not a secret.
+      # Use the in-cluster SonarQube service.
       SONAR_HOST_URL: http://sonarqube.sonarqube.svc.cluster.local:9000
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Sonar's SCM provider (git) + new-code detection need full history/blame.
+          # Sonar needs full history for blame and new-code detection.
           fetch-depth: 0
 
-      # No repo secret: the job exchanges its GitHub OIDC token for a 15-minute
-      # Vault token via the `external-dns-uddi-webhook-ci` JWT role (iac
-      # vault-config/github-actions.tf), which is bound to this repo + this
-      # workflow on main and can read exactly one leaf: the SonarQube user token.
-      - name: Vault -- read SonarQube token
+      # Exchange the GitHub OIDC token for a 15-minute Vault token. The role is
+      # restricted to this workflow on main and can read only the SonarQube token.
+      - name: Read SonarQube token from Vault
         uses: hashicorp/vault-action@892a26828f195e65540a40b4768ae4571f51ebfc # v4
         with:
           url: ${{ env.VAULT_ADDR }}
@@ -154,16 +126,12 @@ jobs:
       - name: Verify Go coverage report present
         run: |
           if [ ! -s target/sonar/go-coverage.out ]; then
-            echo "::error::target/sonar/go-coverage.out missing after download -- refusing to scan."
+            echo "::error::target/sonar/go-coverage.out is missing after download; refusing to scan."
             exit 1
           fi
 
       - name: Sonar scan
-        # sonar-project.properties points at target/sonar/go-coverage.out and the
-        # checked-out source tree; one analysis per main commit. The scanner is
-        # hermetic (//tools/sonar:scan, JRE-bundled http_archive). --config=local:
-        # this is a host-side `run`, nothing to execute remotely. SONAR_TOKEN
-        # comes from the Vault step above (masked in logs by vault-action).
+        # Run the pinned scanner locally against the source and coverage report.
         run: |
           bazel --output_user_root=/clientd/bazel run --config=local \
             --repository_cache=/clientd/bazel-repo-cache \

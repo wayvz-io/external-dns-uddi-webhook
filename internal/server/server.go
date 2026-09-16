@@ -1,5 +1,5 @@
-// Package server runs the external-dns webhook API (via upstream
-// api.StartHTTPApi) next to a health/metrics listener.
+// Package server runs the ExternalDNS webhook API and a health and metrics
+// listener.
 package server
 
 import (
@@ -22,9 +22,9 @@ import (
 
 // Config configures the listeners.
 type Config struct {
-	// ServerAddr is where the webhook API listens (external-dns side), e.g. "localhost:8888".
+	// ServerAddr is the webhook API listen address, for example "localhost:8888".
 	ServerAddr string
-	// HealthzAddr is where /healthz and /metrics listen, e.g. "0.0.0.0:8080".
+	// HealthzAddr is the health and metrics listen address, for example "0.0.0.0:8080".
 	HealthzAddr string
 	// ReadTimeout and WriteTimeout are passed to the webhook API server.
 	ReadTimeout  time.Duration
@@ -46,7 +46,7 @@ type Server struct {
 	errCh    chan error
 }
 
-// New creates a Server; call Start to begin serving.
+// New creates a Server. Call Start to begin serving.
 func New(cfg Config, p provider.Provider) *Server {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
@@ -64,7 +64,7 @@ func New(cfg Config, p provider.Provider) *Server {
 	return s
 }
 
-// Handler returns the health/metrics mux.
+// Handler returns the health and metrics handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.healthz)
@@ -99,8 +99,8 @@ func (s *Server) HealthzAddr() net.Addr {
 	return s.healthLn.Addr()
 }
 
-// Start binds the health listener and launches the webhook API. It returns
-// once the health listener is bound; readiness flips when the API is up.
+// Start binds the health listener and starts the webhook API. It returns after
+// binding the health listener. The server becomes ready when the API starts.
 func (s *Server) Start(ctx context.Context) error {
 	lc := net.ListenConfig{}
 	ln, err := lc.Listen(ctx, "tcp", s.cfg.HealthzAddr)
@@ -125,8 +125,7 @@ func (s *Server) Start(ctx context.Context) error {
 		case <-ctx.Done():
 		}
 	}()
-	// StartHTTPApi blocks for the life of the process and log.Fatal()s if it
-	// cannot bind, so there is nothing to clean up here on failure.
+	// StartHTTPApi blocks and calls log.Fatal if it cannot bind.
 	go api.StartHTTPApi(s.prov, started, s.cfg.ReadTimeout, s.cfg.WriteTimeout, s.cfg.ServerAddr)
 	return nil
 }
@@ -145,8 +144,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Run serves until ctx is cancelled or SIGINT/SIGTERM arrives, then shuts
-// down gracefully.
+// Run serves until ctx is canceled or the process receives SIGINT or SIGTERM.
 func Run(ctx context.Context, cfg Config, p provider.Provider) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()

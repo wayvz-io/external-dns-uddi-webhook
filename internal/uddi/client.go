@@ -20,15 +20,15 @@ const DefaultPageLimit = 1000
 
 // Options configures the real API client.
 type Options struct {
-	// APIKey is the Infoblox Portal API key (required).
+	// APIKey is the required Infoblox Portal API key.
 	APIKey string
-	// PortalURL overrides the Portal base URL (default https://csp.infoblox.com).
+	// PortalURL overrides the default Portal base URL.
 	PortalURL string
-	// DefaultTags are merged into every created/updated record by the SDK.
+	// DefaultTags are added to every record that the SDK creates or updates.
 	DefaultTags map[string]string
-	// PageLimit is the _limit used when paging list calls.
+	// PageLimit sets the _limit value for paginated list calls.
 	PageLimit int
-	// RecordTypes restricts ListRecords to these types; empty means all.
+	// RecordTypes restricts ListRecords to these types. Empty means all types.
 	RecordTypes []string
 	// HTTPClient optionally overrides the transport.
 	HTTPClient *http.Client
@@ -185,8 +185,8 @@ func (c *APIClient) CreateRecord(ctx context.Context, rec Record) (Record, error
 	return fromSDK(resp.Result), nil
 }
 
-// UpdateRecord implements Client. Only rdata, TTL and comment are sent since
-// zone/view/name are immutable or handled via create+delete.
+// UpdateRecord implements Client. It sends only rdata, TTL, and the comment.
+// Zone, view, and name changes require a delete and create.
 func (c *APIClient) UpdateRecord(ctx context.Context, rec Record) (Record, error) {
 	if rec.ID == "" {
 		return Record{}, &Error{Op: "UpdateRecord", StatusCode: http.StatusBadRequest, Err: fmt.Errorf("record id is required")}
@@ -265,10 +265,9 @@ func deref(s *string) string {
 
 func ptr[T any](v T) *T { return &v }
 
-// ttlInheritance tells the Portal whether the record's own ttl is in effect.
-// A ttl sent without this is stored but ignored: the served TTL stays the
-// zone/global default (action "inherit"; observed 2026-09-14 on niosx1, 60
-// stored, 28800 served). nil TTL means inherit.
+// ttlInheritance selects the record TTL or the inherited zone default. The
+// Portal stores but does not serve a TTL without the override action. A nil TTL
+// selects inheritance.
 func ttlInheritance(ttl *int64) *dnsdata.RecordInheritance {
 	action := "inherit"
 	if ttl != nil {
