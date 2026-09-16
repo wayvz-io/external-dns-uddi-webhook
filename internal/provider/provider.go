@@ -127,55 +127,66 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 	}
 	zonesGauge.Set(float64(len(zones)))
 
-	var order []*endpoint.Endpoint
-	groups := map[recordKey]*endpoint.Endpoint{}
-	index := map[recordKey]indexEntry{}
-
+	b := &recordBuilder{groups: map[recordKey]*endpoint.Endpoint{}, index: map[recordKey]indexEntry{}}
 	for _, zone := range zones {
 		recs, err := p.client.ListRecords(ctx, zone.ID)
 		if err != nil {
 			return nil, p.apiErr(fmt.Errorf("zone %s: %w", zone.FQDN, err))
 		}
 		for _, rec := range recs {
-			if !supportedType(rec.Type) {
-				continue
-			}
-			name := strings.TrimSuffix(rec.Name, ".")
-			if !p.filter.Match(name) {
-				continue
-			}
-			target, err := fromRdata(rec.Type, rec.Rdata)
-			if err != nil {
-				p.log.Warn("skipping record with unreadable rdata", "id", rec.ID, "name", name, "type", rec.Type, "error", err)
-				continue
-			}
-			index[keyOf(name, rec.Type, target)] = indexEntry{id: rec.ID, zoneID: zone.ID}
-			if rec.Type == endpoint.RecordTypeTXT {
-				// The Portal stores a single character-string without its quotes;
-				// hand it back in the quoted form AdjustEndpoints and the TXT
-				// registry produce, or every TXT would plan as an update forever.
-				target = quoteTXT(target)
-			}
-			gk := keyOf(name, rec.Type, "")
-			ep, ok := groups[gk]
-			if !ok {
-				ep = endpoint.NewEndpoint(name, rec.Type)
-				if rec.TTL != nil && *rec.TTL > 0 {
-					ep.RecordTTL = endpoint.TTL(*rec.TTL)
-				}
-				groups[gk] = ep
-				order = append(order, ep)
-			}
-			ep.Targets = append(ep.Targets, target)
+			b.add(zone.ID, rec, p.filter, p.log)
 		}
 	}
 
 	p.mu.Lock()
-	p.index = index
+	p.index = b.index
 	p.mu.Unlock()
-	recordsGauge.Set(float64(len(index)))
-	p.log.Debug("listed records", "zones", len(zones), "records", len(index), "endpoints", len(order))
-	return order, nil
+	recordsGauge.Set(float64(len(b.index)))
+	p.log.Debug("listed records", "zones", len(zones), "records", len(b.index), "endpoints", len(b.order))
+	return b.order, nil
+}
+
+// recordBuilder folds UDDI records into external-dns endpoints and the
+// (name,type,target) -> record-id index Records() populates.
+type recordBuilder struct {
+	order  []*endpoint.Endpoint
+	groups map[recordKey]*endpoint.Endpoint
+	index  map[recordKey]indexEntry
+}
+
+// add folds one record from zoneID into the builder, skipping unsupported
+// types, names outside the domain filter, or records with unreadable rdata.
+func (b *recordBuilder) add(zoneID string, rec uddi.Record, filter *endpoint.DomainFilter, log *slog.Logger) {
+	if !supportedType(rec.Type) {
+		return
+	}
+	name := strings.TrimSuffix(rec.Name, ".")
+	if !filter.Match(name) {
+		return
+	}
+	target, err := fromRdata(rec.Type, rec.Rdata)
+	if err != nil {
+		log.Warn("skipping record with unreadable rdata", "id", rec.ID, "name", name, "type", rec.Type, "error", err)
+		return
+	}
+	b.index[keyOf(name, rec.Type, target)] = indexEntry{id: rec.ID, zoneID: zoneID}
+	if rec.Type == endpoint.RecordTypeTXT {
+		// The Portal stores a single character-string without its quotes;
+		// hand it back in the quoted form AdjustEndpoints and the TXT
+		// registry produce, or every TXT would plan as an update forever.
+		target = quoteTXT(target)
+	}
+	gk := keyOf(name, rec.Type, "")
+	ep, ok := b.groups[gk]
+	if !ok {
+		ep = endpoint.NewEndpoint(name, rec.Type)
+		if rec.TTL != nil && *rec.TTL > 0 {
+			ep.RecordTTL = endpoint.TTL(*rec.TTL)
+		}
+		b.groups[gk] = ep
+		b.order = append(b.order, ep)
+	}
+	ep.Targets = append(ep.Targets, target)
 }
 
 // AdjustEndpoints implements provider.Provider: it drops unsupported record
@@ -237,35 +248,12 @@ func (p *Provider) ApplyChanges(ctx context.Context, changes *plan.Changes) erro
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		log := p.log.With("action", string(op.action), "name", op.ep.DNSName, "type", op.ep.RecordType, "target", op.target)
-		if !supportedType(op.ep.RecordType) {
-			log.Warn("skipping unsupported record type")
-			changesTotal.WithLabelValues(string(op.action), "skipped").Inc()
-			continue
-		}
-		zone, ok := findZone(zones, op.ep.DNSName)
-		if !ok {
-			log.Warn("skipping endpoint: no matching zone in view")
-			changesTotal.WithLabelValues(string(op.action), "skipped").Inc()
-			continue
-		}
-		if p.dryRun {
-			log.Info("dry-run: would apply change", "zone", zone.FQDN, "ttl", int64(op.ep.RecordTTL))
-			changesTotal.WithLabelValues(string(op.action), "dry_run").Inc()
-			continue
-		}
-		err := p.apply(ctx, zone, op)
-		switch {
-		case err == nil:
-			changesTotal.WithLabelValues(string(op.action), "ok").Inc()
-		case !isInputError(err) && uddi.IsRetryable(err):
-			changesTotal.WithLabelValues(string(op.action), "error").Inc()
+		abort, err := p.applyOne(ctx, zones, op)
+		if abort {
 			return p.apiErr(err)
-		default:
-			changesTotal.WithLabelValues(string(op.action), "error").Inc()
-			apiErrorsTotal.WithLabelValues("false").Inc()
-			log.Error("change rejected", "zone", zone.FQDN, "error", err)
-			soft = append(soft, fmt.Errorf("%s %s %s %q: %w", op.action, op.ep.RecordType, op.ep.DNSName, op.target, err))
+		}
+		if err != nil {
+			soft = append(soft, err)
 		}
 	}
 	if len(soft) > 0 {
@@ -274,82 +262,175 @@ func (p *Provider) ApplyChanges(ctx context.Context, changes *plan.Changes) erro
 	return nil
 }
 
+// applyOne applies a single change and updates metrics/logs for it. abort
+// reports a retryable infrastructure failure that should stop the whole
+// batch; a non-nil err with abort false is a rejected change to collect as a
+// soft error and keep going.
+func (p *Provider) applyOne(ctx context.Context, zones []uddi.Zone, op change) (abort bool, err error) {
+	log := p.log.With("action", string(op.action), "name", op.ep.DNSName, "type", op.ep.RecordType, "target", op.target)
+	if !supportedType(op.ep.RecordType) {
+		log.Warn("skipping unsupported record type")
+		changesTotal.WithLabelValues(string(op.action), "skipped").Inc()
+		return false, nil
+	}
+	zone, ok := findZone(zones, op.ep.DNSName)
+	if !ok {
+		log.Warn("skipping endpoint: no matching zone in view")
+		changesTotal.WithLabelValues(string(op.action), "skipped").Inc()
+		return false, nil
+	}
+	if p.dryRun {
+		log.Info("dry-run: would apply change", "zone", zone.FQDN, "ttl", int64(op.ep.RecordTTL))
+		changesTotal.WithLabelValues(string(op.action), "dry_run").Inc()
+		return false, nil
+	}
+
+	switch err := p.apply(ctx, zone, op); {
+	case err == nil:
+		changesTotal.WithLabelValues(string(op.action), "ok").Inc()
+		return false, nil
+	case !isInputError(err) && uddi.IsRetryable(err):
+		changesTotal.WithLabelValues(string(op.action), "error").Inc()
+		return true, err
+	default:
+		changesTotal.WithLabelValues(string(op.action), "error").Inc()
+		apiErrorsTotal.WithLabelValues("false").Inc()
+		log.Error("change rejected", "zone", zone.FQDN, "error", err)
+		return false, fmt.Errorf("%s %s %s %q: %w", op.action, op.ep.RecordType, op.ep.DNSName, op.target, err)
+	}
+}
+
+// epKey identifies one logical endpoint across an UpdateOld/UpdateNew pair,
+// independent of target values.
+type epKey struct{ name, typ, setID string }
+
+func changeKey(ep *endpoint.Endpoint) epKey {
+	return epKey{strings.ToLower(strings.TrimSuffix(ep.DNSName, ".")), ep.RecordType, ep.SetIdentifier}
+}
+
 // planChanges flattens plan.Changes into per-target operations, ordered
 // deletes -> updates -> creates so CNAME/A conflicts resolve cleanly.
 func planChanges(changes *plan.Changes) []change {
-	var deletes, updates, creates []change
+	old := indexByKey(changes.UpdateOld)
+	creates, updates, deletes := diffUpdates(changes.UpdateNew, old)
+	// Anything still in old after diffUpdates had no UpdateNew match by key,
+	// so the whole endpoint is going away; iterate UpdateOld again (rather
+	// than the map) to keep the output order deterministic.
+	deletes = append(deletes, unmatchedDeletes(changes.UpdateOld, old)...)
+	deletes = append(deletes, deletesFromAll(changes.Delete)...)
+	creates = append(creates, createsFromAll(changes.Create)...)
 
-	type epKey struct{ name, typ, setID string }
-	key := func(ep *endpoint.Endpoint) epKey {
-		return epKey{strings.ToLower(strings.TrimSuffix(ep.DNSName, ".")), ep.RecordType, ep.SetIdentifier}
-	}
-	old := map[epKey]*endpoint.Endpoint{}
-	for _, ep := range changes.UpdateOld {
-		if ep != nil {
-			old[key(ep)] = ep
-		}
-	}
-	for _, ep := range changes.UpdateNew {
-		if ep == nil {
-			continue
-		}
-		k := key(ep)
-		prev, ok := old[k]
-		if !ok {
-			for _, t := range ep.Targets {
-				creates = append(creates, change{actionCreate, ep, t})
-			}
-			continue
-		}
-		delete(old, k)
-		oldTargets := targetSet(prev.Targets)
-		newTargets := targetSet(ep.Targets)
-		ttlChanged := prev.RecordTTL != ep.RecordTTL
-		for _, t := range ep.Targets {
-			switch {
-			case !oldTargets[t]:
-				creates = append(creates, change{actionCreate, ep, t})
-			case ttlChanged:
-				updates = append(updates, change{actionUpdate, ep, t})
-			}
-		}
-		for _, t := range prev.Targets {
-			if !newTargets[t] {
-				deletes = append(deletes, change{actionDelete, prev, t})
-			}
-		}
-	}
-	for _, ep := range changes.UpdateOld {
-		if ep == nil {
-			continue
-		}
-		if _, unmatched := old[key(ep)]; unmatched {
-			for _, t := range ep.Targets {
-				deletes = append(deletes, change{actionDelete, ep, t})
-			}
-		}
-	}
-	for _, ep := range changes.Delete {
-		if ep == nil {
-			continue
-		}
-		for _, t := range ep.Targets {
-			deletes = append(deletes, change{actionDelete, ep, t})
-		}
-	}
-	for _, ep := range changes.Create {
-		if ep == nil {
-			continue
-		}
-		for _, t := range ep.Targets {
-			creates = append(creates, change{actionCreate, ep, t})
-		}
-	}
 	out := make([]change, 0, len(deletes)+len(updates)+len(creates))
 	out = append(out, deletes...)
 	out = append(out, updates...)
 	out = append(out, creates...)
 	return out
+}
+
+// diffUpdates matches each UpdateNew endpoint against old by key, removing
+// matches from old as it goes, and returns the resulting creates/updates/
+// deletes.
+func diffUpdates(updateNew []*endpoint.Endpoint, old map[epKey]*endpoint.Endpoint) (creates, updates, deletes []change) {
+	for _, ep := range updateNew {
+		if ep == nil {
+			continue
+		}
+		k := changeKey(ep)
+		prev, ok := old[k]
+		if !ok {
+			creates = append(creates, createsFor(ep)...)
+			continue
+		}
+		delete(old, k)
+		c, u, d := diffTargets(prev, ep)
+		creates = append(creates, c...)
+		updates = append(updates, u...)
+		deletes = append(deletes, d...)
+	}
+	return creates, updates, deletes
+}
+
+// unmatchedDeletes returns deletes for the UpdateOld endpoints still present
+// in old (i.e. diffUpdates found no UpdateNew counterpart for them).
+func unmatchedDeletes(updateOld []*endpoint.Endpoint, old map[epKey]*endpoint.Endpoint) []change {
+	var out []change
+	for _, ep := range updateOld {
+		if ep == nil {
+			continue
+		}
+		if _, unmatched := old[changeKey(ep)]; unmatched {
+			out = append(out, deletesFor(ep)...)
+		}
+	}
+	return out
+}
+
+func deletesFromAll(eps []*endpoint.Endpoint) []change {
+	var out []change
+	for _, ep := range eps {
+		if ep != nil {
+			out = append(out, deletesFor(ep)...)
+		}
+	}
+	return out
+}
+
+func createsFromAll(eps []*endpoint.Endpoint) []change {
+	var out []change
+	for _, ep := range eps {
+		if ep != nil {
+			out = append(out, createsFor(ep)...)
+		}
+	}
+	return out
+}
+
+func indexByKey(eps []*endpoint.Endpoint) map[epKey]*endpoint.Endpoint {
+	m := make(map[epKey]*endpoint.Endpoint, len(eps))
+	for _, ep := range eps {
+		if ep != nil {
+			m[changeKey(ep)] = ep
+		}
+	}
+	return m
+}
+
+func createsFor(ep *endpoint.Endpoint) []change {
+	out := make([]change, 0, len(ep.Targets))
+	for _, t := range ep.Targets {
+		out = append(out, change{actionCreate, ep, t})
+	}
+	return out
+}
+
+func deletesFor(ep *endpoint.Endpoint) []change {
+	out := make([]change, 0, len(ep.Targets))
+	for _, t := range ep.Targets {
+		out = append(out, change{actionDelete, ep, t})
+	}
+	return out
+}
+
+// diffTargets compares an endpoint's previous and new target lists and
+// returns the creates/updates/deletes needed to converge prev into ep.
+func diffTargets(prev, ep *endpoint.Endpoint) (creates, updates, deletes []change) {
+	oldTargets := targetSet(prev.Targets)
+	newTargets := targetSet(ep.Targets)
+	ttlChanged := prev.RecordTTL != ep.RecordTTL
+	for _, t := range ep.Targets {
+		switch {
+		case !oldTargets[t]:
+			creates = append(creates, change{actionCreate, ep, t})
+		case ttlChanged:
+			updates = append(updates, change{actionUpdate, ep, t})
+		}
+	}
+	for _, t := range prev.Targets {
+		if !newTargets[t] {
+			deletes = append(deletes, change{actionDelete, prev, t})
+		}
+	}
+	return creates, updates, deletes
 }
 
 func targetSet(targets []string) map[string]bool {
@@ -361,79 +442,91 @@ func targetSet(targets []string) map[string]bool {
 }
 
 func (p *Provider) apply(ctx context.Context, zone uddi.Zone, op change) error {
-	name := strings.TrimSuffix(op.ep.DNSName, ".")
 	switch op.action {
 	case actionCreate:
-		rdata, err := toRdata(op.ep.RecordType, op.target)
-		if err != nil {
-			return &inputError{err}
-		}
-		created, err := p.client.CreateRecord(ctx, uddi.Record{
-			Name:    name,
-			Type:    op.ep.RecordType,
-			Rdata:   rdata,
-			TTL:     ttlPtr(op.ep.RecordTTL),
-			ZoneID:  zone.ID,
-			ViewID:  p.viewID,
-			Comment: p.comment,
-			Tags:    p.tags,
-		})
-		if err != nil {
-			return err
-		}
-		p.setIndex(keyOf(name, op.ep.RecordType, op.target), indexEntry{id: created.ID, zoneID: zone.ID})
-		p.log.Info("created record", "id", created.ID, "name", name, "type", op.ep.RecordType, "target", op.target)
-		return nil
-
+		return p.applyCreate(ctx, zone, op)
 	case actionUpdate:
-		id, err := p.lookupID(ctx, zone, name, op.ep.RecordType, op.target)
-		if err != nil {
-			return err
-		}
-		if id == "" {
-			// The record we meant to retune does not exist; create it instead.
-			return p.apply(ctx, zone, change{actionCreate, op.ep, op.target})
-		}
-		rdata, err := toRdata(op.ep.RecordType, op.target)
-		if err != nil {
-			return &inputError{err}
-		}
-		if _, err := p.client.UpdateRecord(ctx, uddi.Record{
-			ID:      id,
-			Name:    name,
-			Type:    op.ep.RecordType,
-			Rdata:   rdata,
-			TTL:     ttlPtr(op.ep.RecordTTL),
-			Comment: p.comment,
-			Tags:    p.tags,
-		}); err != nil {
-			return err
-		}
-		p.log.Info("updated record", "id", id, "name", name, "type", op.ep.RecordType, "target", op.target, "ttl", int64(op.ep.RecordTTL))
-		return nil
-
+		return p.applyUpdate(ctx, zone, op)
 	case actionDelete:
-		id, err := p.lookupID(ctx, zone, name, op.ep.RecordType, op.target)
-		if err != nil {
-			return err
-		}
-		if id == "" {
-			p.log.Warn("record to delete not found; treating as already deleted", "name", name, "type", op.ep.RecordType, "target", op.target)
-			return nil
-		}
-		if err := p.client.DeleteRecord(ctx, id); err != nil {
-			var apiErr *uddi.Error
-			if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
-				p.log.Warn("record already gone", "id", id)
-			} else {
-				return err
-			}
-		}
-		p.deleteIndex(keyOf(name, op.ep.RecordType, op.target))
-		p.log.Info("deleted record", "id", id, "name", name, "type", op.ep.RecordType, "target", op.target)
-		return nil
+		return p.applyDelete(ctx, zone, op)
 	}
 	return fmt.Errorf("unknown action %q", op.action)
+}
+
+func (p *Provider) applyCreate(ctx context.Context, zone uddi.Zone, op change) error {
+	name := strings.TrimSuffix(op.ep.DNSName, ".")
+	rdata, err := toRdata(op.ep.RecordType, op.target)
+	if err != nil {
+		return &inputError{err}
+	}
+	created, err := p.client.CreateRecord(ctx, uddi.Record{
+		Name:    name,
+		Type:    op.ep.RecordType,
+		Rdata:   rdata,
+		TTL:     ttlPtr(op.ep.RecordTTL),
+		ZoneID:  zone.ID,
+		ViewID:  p.viewID,
+		Comment: p.comment,
+		Tags:    p.tags,
+	})
+	if err != nil {
+		return err
+	}
+	p.setIndex(keyOf(name, op.ep.RecordType, op.target), indexEntry{id: created.ID, zoneID: zone.ID})
+	p.log.Info("created record", "id", created.ID, "name", name, "type", op.ep.RecordType, "target", op.target)
+	return nil
+}
+
+func (p *Provider) applyUpdate(ctx context.Context, zone uddi.Zone, op change) error {
+	name := strings.TrimSuffix(op.ep.DNSName, ".")
+	id, err := p.lookupID(ctx, zone, name, op.ep.RecordType, op.target)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		// The record we meant to retune does not exist; create it instead.
+		return p.applyCreate(ctx, zone, op)
+	}
+	rdata, err := toRdata(op.ep.RecordType, op.target)
+	if err != nil {
+		return &inputError{err}
+	}
+	if _, err := p.client.UpdateRecord(ctx, uddi.Record{
+		ID:      id,
+		Name:    name,
+		Type:    op.ep.RecordType,
+		Rdata:   rdata,
+		TTL:     ttlPtr(op.ep.RecordTTL),
+		Comment: p.comment,
+		Tags:    p.tags,
+	}); err != nil {
+		return err
+	}
+	p.log.Info("updated record", "id", id, "name", name, "type", op.ep.RecordType, "target", op.target, "ttl", int64(op.ep.RecordTTL))
+	return nil
+}
+
+func (p *Provider) applyDelete(ctx context.Context, zone uddi.Zone, op change) error {
+	name := strings.TrimSuffix(op.ep.DNSName, ".")
+	id, err := p.lookupID(ctx, zone, name, op.ep.RecordType, op.target)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		p.log.Warn("record to delete not found; treating as already deleted", "name", name, "type", op.ep.RecordType, "target", op.target)
+		return nil
+	}
+	if err := p.client.DeleteRecord(ctx, id); err != nil {
+		var apiErr *uddi.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == 404 {
+			p.log.Warn("record already gone", "id", id)
+		} else {
+			return err
+		}
+	}
+	p.deleteIndex(keyOf(name, op.ep.RecordType, op.target))
+	p.log.Info("deleted record", "id", id, "name", name, "type", op.ep.RecordType, "target", op.target)
+	return nil
 }
 
 // lookupID finds the record id for (name,type,target), refreshing the index
