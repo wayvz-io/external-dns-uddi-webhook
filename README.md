@@ -63,6 +63,15 @@ interval: 1m
 The chart already probes `/healthz` on port 8080 of the `webhook` container.
 `deploy/kustomize/` has the equivalent raw manifests as a reviewable example.
 
+## What it looks like
+
+Records as the provider creates them, in the Infoblox Portal. Each hostname gets
+its address record, and the ExternalDNS TXT registry records sit alongside under
+the record-type-aware prefix, which is what marks them as owned and keeps the
+provider off anything it did not create.
+
+![ExternalDNS-managed records in the Infoblox Portal](docs/images/portal-records.png)
+
 ## Development
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building, testing, and
