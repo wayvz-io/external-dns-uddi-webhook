@@ -27,6 +27,12 @@ jobs:
   # `name:` stable.
   rbe:
     name: Test (RBE)
+    # This runs on a self-hosted runner inside the lab cluster with direct
+    # access to Buildbarn. Once the repo is public, a fork PR must not be able
+    # to schedule work on it -- GitHub's repo-level "require approval for
+    # outside collaborators" setting is the primary control, but skip the job
+    # outright for fork PRs too rather than relying on that alone.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: bb-ci-worker
     # Cap runaway/wedged jobs. Without this GitHub's default is 6h, so a stuck
     # self-hosted runner blocks the (single) queue slot for hours.
