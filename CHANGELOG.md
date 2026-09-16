@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.1.2...v0.2.0) (2026-09-16)
+
+
+### Bug Fixes
+
+* **webhook:** stop TestRunServesUntilCancelled racing Go's Shutdown grace period ([1fe71d8](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/1fe71d8fcd16a4c750520b61b62cf0b21be57907))
+* **webhook:** stop TestRunServesUntilCancelled racing Go's Shutdown grace period ([4c21243](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/4c212437f72ce463c459a372244605917bfa6d4e))
+
+
+### Miscellaneous Chores
+
+* mark v0.2.0 as the pre-public-release milestone ([b1893d8](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/b1893d8ba1b99b9be1353dfd6b7101f31eb03cf4))
+
 ## [0.1.2](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.1.1...v0.1.2) (2026-09-15)
 
 
