@@ -4,10 +4,9 @@ name: release-please
 # (CHANGELOG + version bump). Merging that PR creates the `vX.Y.Z` tag and the
 # GitHub release stub, and the tag triggers release.yml (image push).
 #
-# The tag is pushed with a GitHub App token, not GITHUB_TOKEN: events created
-# with GITHUB_TOKEN never trigger other workflows, so release.yml would not fire
-# on the tag. The same org App is what nix-rorychatterton's autoupdate uses; its
-# id/key are org secrets granted to this repo.
+# The GitHub App token pushes the tag because events created with GITHUB_TOKEN
+# do not start other workflows. The app ID and private key are organization
+# secrets granted to this repository.
 on:
   push:
     branches:

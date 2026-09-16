@@ -46,8 +46,7 @@ use_repo(
 
 # --- Base image --------------------------------------------------------------
 # gcr.io/distroless/static-debian12:nonroot (uid/gid 65532). `tag` is kept so
-# Renovate's docker datasource can track it; `digest` pins it. Index digest
-# verified 2026-09-13 (docs/research-notes.md section 4).
+# Renovate's docker datasource can track it; `digest` pins the index.
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_static",

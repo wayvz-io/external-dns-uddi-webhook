@@ -1,7 +1,5 @@
-# This example is not applied from this repository. Keep the deployment in your
-# GitOps repository, such as a HelmRelease of the upstream ExternalDNS chart.
-# README.md contains the chart values. These manifests show the equivalent
-# sidecar, environment, RBAC, and Vault configuration.
+# This example expects an `uddi-api-key` Secret in the external-dns namespace.
+# Create that Secret with the secret manager used by your environment.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -10,7 +8,6 @@ namespace: external-dns
 resources:
   - namespace.yaml
   - rbac.yaml
-  - vault-static-secret.yaml
   - deployment.yaml
 
 images:
