@@ -35,55 +35,74 @@ func toRdata(recordType, target string) (map[string]any, error) {
 	target = strings.TrimSpace(target)
 	switch recordType {
 	case endpoint.RecordTypeA:
-		addr, err := netip.ParseAddr(target)
-		if err != nil || !addr.Is4() {
-			return nil, fmt.Errorf("A target %q is not an IPv4 address", target)
-		}
-		return map[string]any{"address": addr.String()}, nil
+		return rdataA(target)
 	case endpoint.RecordTypeAAAA:
-		addr, err := netip.ParseAddr(target)
-		if err != nil || !addr.Is6() {
-			return nil, fmt.Errorf("AAAA target %q is not an IPv6 address", target)
-		}
-		return map[string]any{"address": addr.String()}, nil
+		return rdataAAAA(target)
 	case endpoint.RecordTypeCNAME:
-		if target == "" {
-			return nil, fmt.Errorf("CNAME target must not be empty")
-		}
-		return map[string]any{"cname": fqdn(target)}, nil
+		return rdataName("CNAME", "cname", target)
 	case endpoint.RecordTypeNS:
-		if target == "" {
-			return nil, fmt.Errorf("NS target must not be empty")
-		}
-		return map[string]any{"dname": fqdn(target)}, nil
+		return rdataName("NS", "dname", target)
 	case endpoint.RecordTypeTXT:
 		return map[string]any{"text": target}, nil
 	case endpoint.RecordTypeMX:
-		fields := strings.Fields(target)
-		if len(fields) != 2 {
-			return nil, fmt.Errorf("MX target %q must be \"<preference> <exchange>\"", target)
-		}
-		pref, err := parseUint16(fields[0])
-		if err != nil {
-			return nil, fmt.Errorf("MX target %q: preference: %w", target, err)
-		}
-		return map[string]any{"preference": pref, "exchange": fqdn(fields[1])}, nil
+		return rdataMX(target)
 	case endpoint.RecordTypeSRV:
-		fields := strings.Fields(target)
-		if len(fields) != 4 {
-			return nil, fmt.Errorf("SRV target %q must be \"<priority> <weight> <port> <target>\"", target)
-		}
-		nums := make([]int64, 3)
-		for i, name := range []string{"priority", "weight", "port"} {
-			v, err := parseUint16(fields[i])
-			if err != nil {
-				return nil, fmt.Errorf("SRV target %q: %s: %w", target, name, err)
-			}
-			nums[i] = v
-		}
-		return map[string]any{"priority": nums[0], "weight": nums[1], "port": nums[2], "target": fqdn(fields[3])}, nil
+		return rdataSRV(target)
 	}
 	return nil, fmt.Errorf("unsupported record type %q", recordType)
+}
+
+func rdataA(target string) (map[string]any, error) {
+	addr, err := netip.ParseAddr(target)
+	if err != nil || !addr.Is4() {
+		return nil, fmt.Errorf("A target %q is not an IPv4 address", target)
+	}
+	return map[string]any{"address": addr.String()}, nil
+}
+
+func rdataAAAA(target string) (map[string]any, error) {
+	addr, err := netip.ParseAddr(target)
+	if err != nil || !addr.Is6() {
+		return nil, fmt.Errorf("AAAA target %q is not an IPv6 address", target)
+	}
+	return map[string]any{"address": addr.String()}, nil
+}
+
+// rdataName builds the rdata for a name-valued record (CNAME/NS): label is
+// used in the error message, field is the UDDI rdata key.
+func rdataName(label, field, target string) (map[string]any, error) {
+	if target == "" {
+		return nil, fmt.Errorf("%s target must not be empty", label)
+	}
+	return map[string]any{field: fqdn(target)}, nil
+}
+
+func rdataMX(target string) (map[string]any, error) {
+	fields := strings.Fields(target)
+	if len(fields) != 2 {
+		return nil, fmt.Errorf("MX target %q must be \"<preference> <exchange>\"", target)
+	}
+	pref, err := parseUint16(fields[0])
+	if err != nil {
+		return nil, fmt.Errorf("MX target %q: preference: %w", target, err)
+	}
+	return map[string]any{"preference": pref, "exchange": fqdn(fields[1])}, nil
+}
+
+func rdataSRV(target string) (map[string]any, error) {
+	fields := strings.Fields(target)
+	if len(fields) != 4 {
+		return nil, fmt.Errorf("SRV target %q must be \"<priority> <weight> <port> <target>\"", target)
+	}
+	nums := make([]int64, 3)
+	for i, name := range []string{"priority", "weight", "port"} {
+		v, err := parseUint16(fields[i])
+		if err != nil {
+			return nil, fmt.Errorf("SRV target %q: %s: %w", target, name, err)
+		}
+		nums[i] = v
+	}
+	return map[string]any{"priority": nums[0], "weight": nums[1], "port": nums[2], "target": fqdn(fields[3])}, nil
 }
 
 // fromRdata converts UDDI rdata back into an external-dns target.

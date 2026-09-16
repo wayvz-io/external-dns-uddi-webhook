@@ -75,9 +75,21 @@ func Load(environ map[string]string) (*Config, error) {
 // Validate checks the configuration for internal consistency.
 func (c *Config) Validate() error {
 	var errs []error
-	if c.PortalKey == "" {
-		errs = append(errs, errors.New("INFOBLOX_PORTAL_KEY is required"))
+	errs = append(errs, c.validateServer()...)
+	errs = append(errs, c.validateUDDI()...)
+	if _, err := c.Tags(); err != nil {
+		errs = append(errs, err)
 	}
+	if _, err := c.DomainFilterSpec(); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
+}
+
+// validateServer checks the HTTP-server-facing settings: listen addresses,
+// timeouts and logging.
+func (c *Config) validateServer() []error {
+	var errs []error
 	if err := validatePort("SERVER_PORT", c.ServerPort); err != nil {
 		errs = append(errs, err)
 	}
@@ -92,6 +104,23 @@ func (c *Config) Validate() error {
 	}
 	if c.ServerReadTimeout < 0 || c.ServerWriteTimeout < 0 {
 		errs = append(errs, errors.New("SERVER_READ_TIMEOUT and SERVER_WRITE_TIMEOUT must not be negative"))
+	}
+	if _, err := parseLevel(c.LogLevel); err != nil {
+		errs = append(errs, err)
+	}
+	switch strings.ToLower(c.LogFormat) {
+	case "json", "text":
+	default:
+		errs = append(errs, fmt.Errorf("LOG_FORMAT %q must be json or text", c.LogFormat))
+	}
+	return errs
+}
+
+// validateUDDI checks the Infoblox Portal / Universal DDI settings.
+func (c *Config) validateUDDI() []error {
+	var errs []error
+	if c.PortalKey == "" {
+		errs = append(errs, errors.New("INFOBLOX_PORTAL_KEY is required"))
 	}
 	if u, err := url.Parse(c.PortalURL); err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		errs = append(errs, fmt.Errorf("INFOBLOX_PORTAL_URL %q must be an absolute http(s) URL", c.PortalURL))
@@ -108,21 +137,7 @@ func (c *Config) Validate() error {
 	if c.DefaultTTL < 0 || c.DefaultTTL > 2147483647 {
 		errs = append(errs, fmt.Errorf("UDDI_DEFAULT_TTL %d must be between 0 and 2147483647", c.DefaultTTL))
 	}
-	if _, err := parseLevel(c.LogLevel); err != nil {
-		errs = append(errs, err)
-	}
-	switch strings.ToLower(c.LogFormat) {
-	case "json", "text":
-	default:
-		errs = append(errs, fmt.Errorf("LOG_FORMAT %q must be json or text", c.LogFormat))
-	}
-	if _, err := c.Tags(); err != nil {
-		errs = append(errs, err)
-	}
-	if _, err := c.DomainFilterSpec(); err != nil {
-		errs = append(errs, err)
-	}
-	return errors.Join(errs...)
+	return errs
 }
 
 func validatePort(name string, port int) error {
