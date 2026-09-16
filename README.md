@@ -71,8 +71,3 @@ releasing this project.
 ## Licence
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
-
-Apache-2.0 rather than MIT to match the ecosystem this plugs into (ExternalDNS,
-the Infoblox Go client and the Prometheus client are all Apache-2.0) and for
-its express patent grant, which matters for a project whose whole purpose is
-interoperating with a commercial vendor API.
