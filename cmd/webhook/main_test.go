@@ -87,10 +87,21 @@ func TestRunServesUntilCancelled(t *testing.T) {
 		}, &out)
 	}()
 
+	// Keep-alives are disabled here so every health check closes its
+	// connection immediately after the response. With the default
+	// keep-alive client, net/http.Transport occasionally races a fresh
+	// dial against reusing a pooled idle connection; the loser is left
+	// sitting on the healthz listener having never sent a request. Right
+	// after that, net/http.Server.Shutdown treats a freshly accepted
+	// ("new") connection as non-idle for a hard-coded 5s grace period
+	// (see https://go.dev/issue/22682) before force-closing it, so run()
+	// occasionally takes just over 5s to return -- racing this test's own
+	// 5s "did not stop" deadline below and failing intermittently.
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 	url := fmt.Sprintf("http://127.0.0.1:%s/healthz", healthzPort)
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := http.Get(url)
+		resp, err := client.Get(url)
 		if err == nil {
 			resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -99,7 +110,7 @@ func TestRunServesUntilCancelled(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
