@@ -1,99 +1,53 @@
-# Bazel configuration for external-dns-uddi-webhook.
-#
-# Defaults target the lab Buildbarn cluster (RBE) like the bombora repo; use
-# --config=local for a purely local/offline build and --config=remote for the
-# CI (build-without-the-bytes) variant. .bazelrc.user (gitignored) is loaded
-# last for per-machine overrides.
+# Bazel runs locally unless the caller selects --config=remote.
 
-# Local disk cache at setup-bazel's default path, so local and CI agree.
+# Use the same local cache path in development and CI.
 build --disk_cache=~/.cache/bazel-disk
 
-# Build with optimization; the shipped binary is the same one the tests use.
+# Build the optimized binary used by the container image.
 build -c opt
 
-# Pure Go (no cgo) -> static binary that runs on distroless/static and
-# cross-compiles for the arm64 image without a C toolchain on the worker.
+# The project does not use cgo. Disable host C toolchain detection so analysis
+# also works on machines without a C compiler.
 build --@rules_go//go/config:pure=true
-# No C compiler is needed anywhere (pure Go), so skip rules_cc's host gcc
-# autodetection; it otherwise fails analysis on a gcc-less machine (nix shell)
-# because rules_go's tooling still resolves a cc toolchain. `common` so
-# `mod`/`query`/`fetch` see it too.
 common --repo_env=BAZEL_DO_NOT_DETECT_CPP_TOOLCHAIN=1
 
-# Show test errors
 test --test_output=errors
 test --test_verbose_timeout_warnings
 
 build --show_progress_rate_limit=5
-
-# ----------------------------------------------------------------------------
-# Remote Build Execution against the lab Buildbarn cluster (DEFAULT)
-#
-# Plain `build` lines, not a config: RBE is the unconditional default, so each
-# routing config below is a delta over them. --config=local empties the
-# endpoints to opt out. The gRPC link is plaintext (grpc://) because
-# Tailscale/WireGuard provides the encryption.
-# ----------------------------------------------------------------------------
-build --remote_executor=grpc://bb.lab.wayvz.io:8980
-build --remote_instance_name=
-build --remote_timeout=3600
-build --verbose_failures
-# Exec-properties MUST match the scheduler's predeclared x86 `act` queue exactly
-# or actions sit queued with no matching worker.
-build --remote_default_exec_properties=OSFamily=linux
-build --remote_default_exec_properties=cpu=x86_64
-build --remote_default_exec_properties=container-image=docker://ghcr.io/catthehacker/ubuntu:act-22.04
-# The cluster currently exposes 4 execution slots (2 workers x concurrency 2).
 build --jobs=4
-# BES -> portal on plaintext :8082 (WireGuard encrypts, like the executor above).
-build --bes_backend=grpc://bb-portal.lab.wayvz.io:8082
-build --bes_results_url=https://bb-portal.lab.wayvz.io/bazel-invocations/
-# Local top-level artifacts by default; :remote opts into build-without-the-bytes.
-build --remote_download_toplevel
-# Actions run on the worker image, so pin the shell and PATH to the worker's
-# tools rather than the host's. A nix dev shell would otherwise leak /nix/store
-# paths into remote actions and the test runner exits 127 on the worker.
-build --extra_execution_platforms=//tools/remote-toolchains:remote_platform
-build --shell_executable=/bin/bash
-build --action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-build --host_action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-build --incompatible_strict_action_env
 
-# The local configuration clears the remote endpoints so it overrides the
-# default. `common` (not `build`) so `bazel mod graph --config=local` works too.
-# The PATH pins above are undone here. The shell pin stays: Bazel cannot reset
-# it to autodetect, so on NixOS (no /bin/bash) the devshell hook writes the
-# host bash path into .bazelrc.user (see flake.nix).
+# Keep --config=local as a compatible spelling for scripts and old commands.
 common:local --remote_executor=
 common:local --remote_cache=
 common:local --bes_backend=
-common:local --remote_download_toplevel
-common:local --action_env=PATH
-common:local --host_action_env=PATH
+build:local --remote_download_toplevel
 
-# CI variant (bb-ci-worker). The workflow re-points executor/cache at the
-# bb-clientd unix socket and sets the instance name; this config carries the
-# rest.
+# Wayvz CI overrides the endpoints with its bb-clientd socket. The remaining
+# settings describe the Buildbarn execution platform and output policy.
+build:remote --remote_executor=grpc://bb.lab.wayvz.io:8980
+build:remote --remote_instance_name=
 build:remote --remote_timeout=3600
-# Build without the Bytes: keep action outputs in the CAS; retry if a blob a
-# later action needs was evicted.
+build:remote --verbose_failures
+build:remote --remote_default_exec_properties=OSFamily=linux
+build:remote --remote_default_exec_properties=cpu=x86_64
+build:remote --remote_default_exec_properties=container-image=docker://ghcr.io/catthehacker/ubuntu:act-22.04
+build:remote --bes_backend=grpc://bb-portal.lab.wayvz.io:8082
+build:remote --bes_results_url=https://bb-portal.lab.wayvz.io/bazel-invocations/
 build:remote --remote_download_minimal
 build:remote --experimental_remote_cache_eviction_retries=5
+build:remote --extra_execution_platforms=//tools/remote-toolchains:remote_platform
+build:remote --shell_executable=/bin/bash
+build:remote --action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+build:remote --host_action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+build:remote --incompatible_strict_action_env
 
-# ----------------------------------------------------------------------------
-# Coverage -> SonarQube
-#
-# Sonar's Go analyzer ingests native `go test -coverprofile` files
-# (sonar.go.coverage.reportPaths), not lcov, so emit go_cover and skip Bazel's
-# lcov merger (it cannot combine go_cover files). scripts/merge-go-coverage.sh
-# concatenates bazel-testlogs/**/coverage.dat into target/sonar/go-coverage.out.
-# With remote_download_minimal the per-test coverage.dat must be pulled down
-# explicitly, hence the download regex.
-# ----------------------------------------------------------------------------
+# Sonar reads native Go coverage profiles. The merge script combines the
+# per-test coverage.dat files in target/sonar/go-coverage.out.
 coverage --@rules_go//go/config:cover_format=go_cover
 coverage --combined_report=none
 coverage --instrumentation_filter=//...
 coverage --remote_download_regex=.*/coverage\.dat$
 
-# Environment-specific overrides. Gitignored; optional. Loaded last so it wins.
+# Load optional machine-specific settings last.
 try-import %workspace%/.bazelrc.user
