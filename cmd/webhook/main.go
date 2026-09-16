@@ -27,8 +27,8 @@ func main() {
 	}
 }
 
-// run wires config -> UDDI client -> provider -> server and blocks until ctx
-// is cancelled. environ is the process environment as a map.
+// run starts the configured provider and blocks until ctx is canceled.
+// environ contains the process environment.
 func run(ctx context.Context, environ map[string]string, out io.Writer) error {
 	cfg, err := config.Load(environ)
 	if err != nil {

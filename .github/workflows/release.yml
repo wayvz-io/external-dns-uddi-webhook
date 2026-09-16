@@ -1,8 +1,7 @@
 name: Release
 
-# Triggered by the `vX.Y.Z` tag that release-please.yml creates when its
-# release PR merges. Re-runs the test suite, pushes the multi-arch image to ghcr
-# (tags: vX.Y.Z, vX.Y, latest) and publishes the GitHub release.
+# A `vX.Y.Z` tag from Release Please starts this workflow. It tests the tagged
+# source, publishes the multi-architecture image, and creates the GitHub release.
 on:
   push:
     tags:
@@ -22,7 +21,7 @@ jobs:
     env:
       BES_BACKEND: grpc://bb-portal.buildbarn:8082
       BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
-      # oci_push (crane) reads registry creds from $DOCKER_CONFIG/config.json.
+      # oci_push reads registry credentials from this directory.
       DOCKER_CONFIG: ${{ github.workspace }}/.docker
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,8 +29,7 @@ jobs:
           fetch-depth: 0  # tags + history for release notes
 
       - name: Test on RBE (via bb-clientd)
-        # Same invocation shape as ci.yml (see the comments there); plain
-        # `test`, no coverage instrumentation for the release build.
+        # Release builds run the test suite without coverage instrumentation.
         run: |
           run_tests() {
             bazel --output_user_root=/clientd/bazel test --config=remote \
@@ -49,9 +47,7 @@ jobs:
           }
 
       - name: Log in to ghcr.io
-        # Written by hand rather than docker/login-action: the bb-ci-worker
-        # image is actions-runner + bazel, and `docker login` would want the
-        # CLI/daemon. crane only needs the config.json.
+        # Crane needs config.json but does not require the Docker CLI or daemon.
         run: |
           mkdir -p "$DOCKER_CONFIG"
           auth="$(printf '%s:%s' "${{ github.actor }}" "${{ secrets.GITHUB_TOKEN }}" | base64 -w0)"
@@ -59,10 +55,8 @@ jobs:
           chmod 600 "$DOCKER_CONFIG/config.json"
 
       - name: Push multi-arch image
-        # --stamp + workspace-status.sh feed STABLE_GIT_TAG into //:image_tags
-        # (latest, vX.Y.Z, vX.Y). The push runs on the runner, so it needs the
-        # image layout locally: override :remote's download_minimal with
-        # --remote_download_outputs=all (one small static binary x2 + distroless).
+        # Stamping passes the Git tag to //:image_tags. Download both image
+        # layouts because the push runs on the runner.
         run: |
           bazel --output_user_root=/clientd/bazel run --config=remote \
             --remote_executor=unix:///clientd/bb_clientd/grpc \

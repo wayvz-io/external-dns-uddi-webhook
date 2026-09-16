@@ -1,73 +1,88 @@
 # Development
 
-Everything a contributor needs to build, test, and release this repo.
-User-facing docs live in [`../README.md`](../README.md); design docs live in
-[`PLAN.md`](PLAN.md).
+This guide covers the build, test, and release workflows. See the
+[README](../README.md) for deployment configuration and the [design](PLAN.md)
+for implementation decisions.
 
 ## Build and test locally
 
+Enter the Nix development shell, then run the test suite locally:
+
 ```sh
-nix develop                        # or: direnv allow
-bazel test //...                   # RBE (see "Build infrastructure" below)
-bazel test --config=local //...    # offline, everything local
-bazel run //:gazelle               # regenerate cmd/** internal/** BUILD files
-bazel mod tidy                     # refresh use_repo(go_deps, ...) after go.mod changes
+nix develop
+bazel test --config=local //...
+```
+
+If you use direnv, run `direnv allow` instead of `nix develop`.
+
+Use these commands for common maintenance tasks:
+
+```sh
+bazel run //:gazelle
+bazel mod tidy
 bazel run @rules_go//go -- mod tidy
 bazel run //:buildifier_check
-bazel run --config=local //:load   # image -> local podman/docker as :dev
-bazel coverage //... && scripts/merge-go-coverage.sh   # -> target/sonar/go-coverage.out
-scripts/sonar-scan.sh              # local Sonar scan (creds via env or `op`)
+bazel run --config=local //:load
+bazel coverage //...
+scripts/merge-go-coverage.sh
+scripts/sonar-scan.sh
 ```
+
+Run Gazelle after you change Go packages. Run both module tidy commands after
+you change `go.mod`. The `//:load` target loads the `:dev` image into Podman or
+Docker. The coverage script writes `target/sonar/go-coverage.out` for SonarQube.
 
 ### Bazel targets
 
-| Target | What |
+| Target | Purpose |
 |---|---|
-| `//cmd/webhook` | the binary (gazelle-generated) |
-| `//:image` | single-arch `oci_image` (distroless static, `nonroot`) |
-| `//:image_index` | linux/amd64 + linux/arm64 index |
-| `//:load` | `bazel run` -> local podman/docker image `...:dev` |
-| `//:push` | push `//:image_index` to ghcr with tags from `//:image_tags` (use `--stamp --workspace_status_command=tools/workspace-status.sh`) |
-| `//:image_tags` | stamped tag list (`latest`, `vX.Y.Z`, `vX.Y`) |
-| `//:gazelle`, `//:buildifier_check`, `//:buildifier_test` | codegen / lint |
-| `//tools/sonar:scan` | hermetic sonar-scanner (`scripts/sonar-scan.sh` wraps it) |
+| `//cmd/webhook` | Webhook binary. Gazelle generates its build rule. |
+| `//:image` | Single-architecture, distroless `oci_image` that runs as `nonroot` |
+| `//:image_index` | Image index for `linux/amd64` and `linux/arm64` |
+| `//:load` | Local Podman or Docker image tagged `:dev` |
+| `//:push` | Pushes `//:image_index` to GHCR with tags from `//:image_tags` |
+| `//:image_tags` | Stamped `latest`, `vX.Y.Z`, and `vX.Y` tag list |
+| `//:gazelle` | Regenerates Go build rules |
+| `//:buildifier_check` | Checks build-file formatting and lint rules |
+| `//:buildifier_test` | Runs the Buildifier check as a test |
+| `//tools/sonar:scan` | Runs the pinned SonarScanner CLI |
 
-`//:buildifier_test` is part of `//...`, so BUILD formatting gates CI.
+`//:buildifier_test` belongs to `//...`, so an invalid build file fails CI.
 
-## Build infrastructure (wayvz lab infrastructure; external contributors use `--config=local`)
+## Use the build infrastructure
 
-`.bazelrc` defaults to the lab Buildbarn RBE cluster (plain `build` lines,
-`--jobs=4`, BES to bb-portal) — this matches the other wayvz repos so there is
-nothing new to operate. External contributors without access to that cluster
-should use `bazel test --config=local //...` for everything, which empties
-the RBE endpoints and runs fully offline. `--config=remote` is the CI flavour
-(build-without-the-bytes; the workflow re-points executor/cache at the
-bb-clientd unix socket). Per-machine overrides go in `.bazelrc.user` (see
-`.bazelrc.user.example`).
+`.bazelrc` uses the Wayvz Buildbarn cluster by default and limits Bazel to four
+jobs. If you cannot access that cluster, pass `--config=local`. The local
+configuration clears the remote endpoints and runs without remote execution.
+
+CI uses `--config=remote` and connects through the `bb-clientd` Unix socket.
+Put machine-specific settings in `.bazelrc.user`. Copy
+`.bazelrc.user.example` as a starting point.
 
 ### CI
 
-`ci.yml`, job `Test (RBE)` on the in-cluster `bb-ci-worker` runner
-(Bazel 9.1.1 + bb-clientd preinstalled, warm output base on `/clientd`):
+The `Test (RBE)` job in `.github/workflows/ci.yml` runs on the in-cluster
+`bb-ci-worker`. The runner has Bazel 9.1.1, `bb-clientd`, and a persistent
+output base at `/clientd`.
 
-1. `bazel coverage --config=remote //...` through the clientd socket, with the
-   retry-once wrapper. One instrumented pass = build + every test + a Go
-   coverprofile per test (`cover_format=go_cover`; Sonar's Go analyzer reads
-   native coverprofiles, not lcov, so Bazel's lcov merger is disabled).
+1. The job runs `bazel coverage --config=remote //...` through the client
+   socket. A wrapper retries the command once. The command builds the project,
+   runs every test, and writes one Go coverage profile per test. Sonar reads
+   native Go profiles, so the configuration disables Bazel's LCOV merger.
 2. `scripts/merge-go-coverage.sh` concatenates `bazel-testlogs/**/coverage.dat`
-   under one `mode:` header into `target/sonar/go-coverage.out`; the job fails if
-   that is empty (an empty report would silently zero Sonar coverage).
-3. Upload artifact `go-coverage`.
+   under one `mode:` header in `target/sonar/go-coverage.out`. The job rejects
+   an empty report because Sonar would otherwise report zero coverage.
+3. The job uploads the result as the `go-coverage` artifact.
 
-`sonar-scan` (push to main / dispatch only, `needs: rbe`, also on `bb-ci-worker`)
-downloads the artifact and runs `bazel run --config=local //tools/sonar:scan`;
-the scanner is a JRE-bundled `http_archive`, so no Java or devshell is needed.
-The job exchanges its GitHub OIDC token for a short-lived Vault token (JWT role
-`external-dns-uddi-webhook-ci`) and reads the shared SonarQube user token, so
-the repo holds no secrets. SonarQube is the static-analysis / quality gate for
-this repo. `codeql.yml` (GitHub-hosted runner, Go + Actions, weekly + on
-push/PR to main) runs alongside it now that the repo is public and GitHub
-Advanced Security is available.
+The `sonar-scan` job runs after pushes to `main` and manual dispatches. It
+downloads the coverage artifact and runs
+`bazel run --config=local //tools/sonar:scan`. The Bazel target includes a JRE,
+so the runner does not need Java or the development shell.
+
+The job exchanges its GitHub OIDC token for a short-lived Vault token under the
+`external-dns-uddi-webhook-ci` role. It then reads the shared SonarQube token.
+The repository stores neither credential. The CodeQL workflow checks Go and
+GitHub Actions on pushes, pull requests, and its weekly schedule.
 
 ### Release flow
 
@@ -83,39 +98,35 @@ conventional commits on main
         softprops/action-gh-release (auto-generated notes)
 ```
 
-`//:image_tags` is a stamped genrule reading `STABLE_GIT_TAG`; without `--stamp`
-it emits only `latest`, so an ad-hoc `bazel run //:push` cannot overwrite a
-semver tag by accident.
+`//:image_tags` reads `STABLE_GIT_TAG` when stamping is enabled. Without
+`--stamp`, the rule emits only `latest`. An ad hoc `bazel run //:push` therefore
+cannot overwrite a version tag.
 
 ### Renovate policy
 
-`renovate.json`: `config:recommended` + pinned action digests + `group:allNonMajor`
-+ `:automergeMinor` (digest / pin updates automerge too), dependency dashboard, OSV alerts, `minimumReleaseAge: 3 days`
-(waived for vulnerability alerts). Managers: `gomod` (with `gomodTidy`,
-`gomodUpdateImportPaths`, indirect deps enabled because `sigs.k8s.io/external-dns`
-drags in the k8s/cloud SDK tree where CVEs land), `bazel-module` (bazel_dep +
-distroless `oci.pull` digest), `github-actions`, `nix`. Exceptions:
-`sigs.k8s.io/external-dns` never auto-merges and never takes a major;
-`universal-ddi-go-client` gets its own PR. The `bazel-module` lockfile refresh
-needs `bazelModDeps` in the Renovate CE server's `allowedUnsafeExecutions`.
+Renovate pins GitHub Action digests and groups non-major updates. It
+automatically merges minor, patch, pin, and digest updates after three days.
+Vulnerability alerts do not wait three days.
 
-## Repo-level setup checklist (wayvz lab infrastructure)
+The configuration manages Go modules, Bazel modules, GitHub Actions, and Nix
+dependencies. It also updates indirect Go dependencies because ExternalDNS
+depends on the Kubernetes and cloud SDK trees. ExternalDNS updates never merge
+automatically or cross a major version. The Universal DDI client gets a
+separate pull request. Bazel lockfile updates require `bazelModDeps` in the
+Renovate CE server's `allowedUnsafeExecutions` setting.
 
-- SonarQube: project `external-dns-uddi-webhook` exists.
-- Sonar credentials: no repo secrets. The post-merge scan runs on
-  `bb-ci-worker`, logs in to Vault with its GitHub OIDC token (JWT role
-  `external-dns-uddi-webhook-ci`, iac `vault-config`) and reads the shared
-  `kv/sonarqube/default/user-token` leaf. The host URL is the in-cluster
-  Service and is not secret.
-- Renovate CE: repo added to `MEND_RNV_AUTODISCOVER_FILTER`. Still to check:
-  `bazelModDeps` in `allowedUnsafeExecutions` and bazelisk in the Renovate
-  image, or `MODULE.bazel.lock` refreshes will be skipped.
-- GitHub App installs: Renovate, SonarQube and ARC apps are installed on all
-  org repos; nothing to grant.
-- Rulesets on `main`: signed commits + wayvz.io author/committer emails (all
-  branches), and deletion/force-push protection + required status check
-  `Test (RBE)` on the default branch.
-- Org secrets `AUTOUPDATE_APP_ID` / `AUTOUPDATE_APP_PRIVATE_KEY` granted to the
-  repo (release-please pushes tags with that App token).
-- Runner group: self-hosted ARC runners (`bb-ci-worker`, `runner-nix-amd64`)
-  scoped to this repo/org.
+## Check the Wayvz repository settings
+
+- Create the `external-dns-uddi-webhook` SonarQube project.
+- Configure the post-merge scan to use the `external-dns-uddi-webhook-ci`
+  Vault role and read `kv/sonarqube/default/user-token`.
+- Add the repository to `MEND_RNV_AUTODISCOVER_FILTER`. Allow `bazelModDeps`
+  and include Bazelisk in the Renovate image so Renovate can update
+  `MODULE.bazel.lock`.
+- Install the Renovate, SonarQube, and ARC GitHub Apps for the organization.
+- Require signed commits and `wayvz.io` author and committer addresses. Protect
+  `main` from deletion and force pushes, and require the `Test (RBE)` check.
+- Grant the repository access to `AUTOUPDATE_APP_ID` and
+  `AUTOUPDATE_APP_PRIVATE_KEY`. Release Please uses this app to push tags.
+- Give the repository access to the `bb-ci-worker` and `runner-nix-amd64`
+  runner group.

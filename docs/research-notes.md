@@ -1,23 +1,21 @@
-# Research: ExternalDNS webhook provider for Infoblox Universal DDI
+# Research for the ExternalDNS Universal DDI webhook
 
-Collected 2026-09-13 from GitHub (via `gh api`), the Bazel Central Registry, Renovate docs,
-and a read-only probe of the live Infoblox Portal API (`csp.infoblox.com`). Every fact has a source URL.
-Code identifiers are quoted verbatim from the sources.
-
----
+These notes were collected on 2026-09-13 from GitHub, the Bazel Central
+Registry, Renovate documentation, and a read-only query of the Infoblox Portal
+API. Each section links to its sources. Code identifiers match the source text.
 
 ## 1. Upstream kubernetes-sigs/external-dns webhook contract
 
-**Latest release:** `v0.22.0` (published 2026-08-20).
+Latest release: `v0.22.0`, published 2026-08-20.
 https://github.com/kubernetes-sigs/external-dns/releases/tag/v0.22.0
 
-**Module / go.mod** (`go.mod` at v0.22.0): `module sigs.k8s.io/external-dns`, `go 1.26.6`.
+Module at `v0.22.0`: `module sigs.k8s.io/external-dns`, `go 1.26.6`.
 No `replace` directives. Notable transitive deps: `k8s.io/api|apimachinery|client-go v0.36.3`,
 `github.com/sirupsen/logrus v1.10.1`, `github.com/prometheus/client_golang v1.24.1`.
 https://github.com/kubernetes-sigs/external-dns/blob/v0.22.0/go.mod
-- Gotcha: importing `sigs.k8s.io/external-dns/provider` drags in k8s.io client-go + controller-runtime
-  transitively (see the adguard/hetzner go.mod indirect blocks). Your `go` directive must be >= 1.26.6
-  or `go mod tidy` will bump it. Depend on `sigs.k8s.io/external-dns v0.22.0`.
+- Importing `sigs.k8s.io/external-dns/provider` also adds `client-go` and
+  `controller-runtime`. Set the `go` directive to at least 1.26.6. Otherwise,
+  `go mod tidy` updates it.
 
 ### Import paths
 
@@ -59,18 +57,20 @@ func StartHTTPApi(provider provider.Provider, startedChan chan struct{}, readTim
 ```
 
 Behaviour notes from the source:
-- Uses `http.NewServeMux()`; routes `"/"`, `UrlRecords`, `UrlAdjustEndpoints`. `UrlApplyChanges`
-  is declared but **not routed**; ApplyChanges is `POST /records` (RecordsHandler switches on method).
+- Uses `http.NewServeMux()` with `"/"`, `UrlRecords`, and `UrlAdjustEndpoints`.
+  `UrlApplyChanges` is declared but not routed. `RecordsHandler` handles
+  ApplyChanges through `POST /records`.
 - `providerPort` is an `Addr` string (e.g. `"localhost:8888"`), not a bare port.
 - Blocks forever; calls logrus `log.Fatal` if listen/serve fails. Signals `startedChan` (if non-nil) after listen.
-- No `/healthz` and no `/metrics` — you must run those yourself on a second listener.
+- The server has no `/healthz` or `/metrics` routes. The webhook provides them
+  on a second listener.
 - NegotiateHandler: `json.NewEncoder(w).Encode(p.Provider.GetDomainFilter())` with
   `Content-Type: application/external.dns.webhook+json;version=1`.
 
 ### `provider/webhook/webhook.go` (client side, what external-dns does)
 https://github.com/kubernetes-sigs/external-dns/blob/v0.22.0/provider/webhook/webhook.go
 - `const acceptHeader = "Accept"; maxRetries = 5`.
-- On startup it GETs `/` with `Accept: <media type>` and **rejects** the provider if the response
+- On startup it gets `/` with `Accept: <media type>` and rejects the provider if the response
   `Content-Type` != `webhookapi.MediaTypeFormatAndVersion`.
 - Retries only `5xx` (`isRetryableError`: `statusCode >= 500 && statusCode <= 510`).
 - `func (p WebhookProvider) GetDomainFilter() endpoint.DomainFilterInterface`.
@@ -86,7 +86,7 @@ https://github.com/kubernetes-sigs/external-dns/blob/v0.22.0/docs/tutorials/webh
 | Negotiate (DomainFilter) | GET | `/` | 200 |
 | Records | GET | `/records` | 200 |
 | AdjustEndpoints | POST | `/adjustendpoints` | 200 |
-| ApplyChanges | POST | `/records` | **204 No Content** |
+| ApplyChanges | POST | `/records` | 204 No Content |
 
 Exposed endpoints (separate listener): `GET /healthz` (probes), `GET /metrics` (optional).
 "The default recommended port for the provider endpoints is `8888`, and should listen only on `localhost`";
@@ -172,26 +172,26 @@ Label constants (`labels.go`): `heritage = "external-dns"`, `OwnerLabelKey = "ow
 `ResourceLabelKey = "resource"`.
 TXT registry (`registry/txt/registry.go`, mapper `registry/mapper/mapper.go`, template `"%{record_type}"`)
 writes TXT targets via `Labels.Serialize(true, ...)` -> `SerializePlain(withQuotes=true)` which produces
-`"heritage=external-dns,external-dns/owner=<id>,external-dns/resource=<kind/ns/name>"` **including the
-surrounding double quotes**; parsing does `strings.Trim(labelText, "\"")`.
+`"heritage=external-dns,external-dns/owner=<id>,external-dns/resource=<kind/ns/name>"`,
+including the surrounding double quotes. Parsing calls
+`strings.Trim(labelText, "\"")`.
 https://github.com/kubernetes-sigs/external-dns/blob/v0.22.0/endpoint/labels.go
 
 ### Helm chart sidecar wiring (chart `external-dns-helm-chart-1.22.0`)
 https://github.com/kubernetes-sigs/external-dns/blob/external-dns-helm-chart-1.22.0/charts/external-dns/templates/deployment.yaml
 - `provider.name: webhook` adds a container `webhook` with `image`, `env`, `args`, `extraVolumeMounts`,
   `resources`, `securityContext`, `livenessProbe`, `readinessProbe`.
-- The container declares **only** `ports: - name: http-webhook, containerPort: 8080`; probes default to
+- The container declares only `ports: - name: http-webhook, containerPort: 8080`; probes default to
   `httpGet.path: /healthz, port: http-webhook`. external-dns reaches the provider via its default
   `http://localhost:8888` (same pod); 8888 is never exposed. `provider.webhook.service.port: 8080` and an
   optional `serviceMonitor` exist for metrics.
-
----
 
 ## 2. Reference webhook implementations
 
 Star counts (2026-09-13): adguard 78, hetzner 62, AbsaOSS infoblox 27, ionos 22, stackit 19;
 `glesys/external-dns-glesys-webhook` redirects to `glesys/external-dns-glesys` (0 stars);
-`kubernetes-sigs/external-dns-provider-template` does not exist (404). Picked: **adguard, hetzner, AbsaOSS infoblox**.
+`kubernetes-sigs/external-dns-provider-template` does not exist and returns
+404. These notes compare AdGuard, Hetzner, and AbsaOSS Infoblox.
 
 ### 2a. muhlba91/external-dns-provider-adguard (v11.1.3, 2026-08-15)
 https://github.com/muhlba91/external-dns-provider-adguard
@@ -210,7 +210,7 @@ https://github.com/muhlba91/external-dns-provider-adguard
   RegexDomainFilter `env:"REGEXP_DOMAIN_FILTER"`; RegexDomainExclusion `env:"REGEXP_DOMAIN_FILTER_EXCLUSION"`
   ```
 - Logging: logrus, JSON formatter by default, `LOG_LEVEL`/`LOG_FORMAT` env.
-- Server: **own chi router** (does not use upstream `StartHTTPApi`): `r.Get("/")`, `r.Get("/records")`,
+- Server: its own chi router instead of upstream `StartHTTPApi`: `r.Get("/")`, `r.Get("/records")`,
   `r.Post("/records")`, `r.Post("/adjustendpoints")` on `SERVER_HOST:SERVER_PORT`; second chi server
   `r.Get("/healthz")`, `r.Get("/metrics", promhttp.Handler())` on `HEALTHZ_HOST:HEALTHZ_PORT`;
   graceful shutdown on SIGHUP/INT/TERM/QUIT with 30 s timeout. Its `pkg/webhook` validates `Accept`/`Content-Type`
@@ -245,7 +245,7 @@ https://github.com/mconfalonieri/external-dns-hetzner-webhook
   `BATCH_SIZE`, `DOMAIN_FILTER`, `EXCLUDE_DOMAIN_FILTER`, `REGEXP_DOMAIN_FILTER`, `REGEXP_DOMAIN_FILTER_EXCLUSION`.
   Socket options: `WEBHOOK_HOST=localhost`, `WEBHOOK_PORT=8888`, `METRICS_HOST=0.0.0.0`, `METRICS_PORT=8080`,
   `READ_TIMEOUT`/`WRITE_TIMEOUT` (ms, default 60000).
-- Server: **uses upstream** `api.StartHTTPApi(provider, startedChan, readTimeout, writeTimeout, addr)` in a goroutine,
+- Server: upstream `api.StartHTTPApi(provider, startedChan, readTimeout, writeTimeout, addr)` in a goroutine,
   waits on `startedChan`, then flips readiness. Own metrics mux: `/`, `/ready`, `/health`, `/healthz`, `/metrics`.
 - Tests: testify assert, table tests, a `mockClient` implementing a narrow client interface; 19 `_test.go` files.
 - Build: goreleaser v2 `dockers_v2` to `ghcr.io/mconfalonieri/external-dns-hetzner-webhook` (`{{ .Tag }}`, `latest`),
@@ -255,20 +255,20 @@ https://github.com/mconfalonieri/external-dns-hetzner-webhook
   `env[HETZNER_API_KEY from secret]`, probes `/health` and `/ready` on `port: http-webhook`,
   `extraArgs: ["--txt-prefix=reg-%{record_type}."]`.
 
-### 2c. AbsaOSS/external-dns-infoblox-webhook (v1.7.2, 2026-07-21) — NIOS WAPI, not UDDI
+### 2c. AbsaOSS/external-dns-infoblox-webhook, NIOS WAPI
 https://github.com/AbsaOSS/external-dns-infoblox-webhook
 - Layout mirrors adguard (`cmd/webhook/init/{configuration,dnsprovider,logging,server}`, `internal/infoblox/`,
   `internal/metrics/`). Deps: `sigs.k8s.io/external-dns v0.21.0`, `infoblox-go-client/v2 v2.12.0`,
   `github.com/alecthomas/kong` (flags + env: `name:"server-host" env:"SERVER_HOST" default:"127.0.0.1"`,
   `SERVER_PORT=8888`, `HEALTH_CHECK_PORT=8080`, `REGEXP_NAME_FILTER`), logrus, testify.
-- Server: **uses upstream** `api.StartHTTPApi(p, wh.Channel, 0, 0, "host:port")`; health mux on `0.0.0.0:<HEALTH_CHECK_PORT>`
+- Server: upstream `api.StartHTTPApi(p, wh.Channel, 0, 0, "host:port")`; health mux on `0.0.0.0:<HEALTH_CHECK_PORT>`
   with `/metrics` (promhttp) and `/healthz` that returns 200 only after `StartHTTPApi` signals the channel.
 - Record model (`internal/infoblox/infoblox.go`, `common.go`):
   - `Records()` lists zones (`ibclient.ZoneAuth` filtered by `View` + `domainFilter.Match(zone.Fqdn)`), then per zone
     fetches A, Host, CNAME, TXT, NS (and PTR for reverse zones) with paging, and groups by name into
     `ResponseMap{Map map[string]ResponseDetails, RecordType}` -> `ToEndpoints()` (one Endpoint per name+type,
     multiple targets merged).
-  - Zone mapping: `findZone(zones, name)` picks the **longest zone FQDN that is a suffix** (`strings.HasSuffix(name, "."+zone.Fqdn)`
+  - Zone mapping: `findZone(zones, name)` picks the longest zone FQDN that is a suffix (`strings.HasSuffix(name, "."+zone.Fqdn)`
     or equal-fold); `ChangesByZone` groups changes per zone and skips records with no matching zone.
   - CNAME vs A: separate WAPI object types (`RecordCNAME.Canonical`, `RecordA.Ipv4Addr`); one object per target.
   - TXT: `// The Infoblox API strips enclosing double quotes from TXT records lacking whitespace.`
@@ -283,15 +283,14 @@ https://github.com/AbsaOSS/external-dns-infoblox-webhook
 - README shows the wire protocol: `curl -H 'Accept: application/external.dns.webhook+json;version=1' localhost:8888/records`
   and POST body `{"Create":null,"UpdateOld":null,"UpdateNew":[{"dnsName":"test.cloud.example.com","targets":["1.3.2.1"],"recordType":"A","recordTTL":300}],"Delete":null}`.
 
----
-
 ## 3. Infoblox Universal DDI Go client
 
-**`github.com/infobloxopen/bloxone-go-client` is deprecated.** Its `go.mod` (v0.4.0) reads:
+`github.com/infobloxopen/bloxone-go-client` is deprecated. Its `go.mod` at v0.4.0 reads:
 `// Deprecated: bloxone-go-client is deprecated. Use github.com/infobloxopen/universal-ddi-go-client instead.`
 https://github.com/infobloxopen/bloxone-go-client/blob/v0.4.0/go.mod
 
-**Use `github.com/infobloxopen/universal-ddi-go-client`**, latest tag `v0.4.0` (2026-07-15), `go 1.23`.
+The replacement is `github.com/infobloxopen/universal-ddi-go-client`. Its
+latest tag on 2026-09-13 was `v0.4.0`, which requires Go 1.23.
 https://github.com/infobloxopen/universal-ddi-go-client/releases/tag/v0.4.0
 CHANGELOG v0.4.0: all identifiers renamed BloxOne -> Universal DDI; env vars `INFOBLOX_PORTAL_KEY` / `INFOBLOX_PORTAL_URL`
 (`BLOXONE_API_KEY` / `BLOXONE_CSP_URL` still accepted as deprecated fallbacks).
@@ -359,7 +358,8 @@ func (r RecordAPIDeleteRequest) Execute() (*http.Response, error)
 type ListRecordResponse   struct { Results []Record `json:"results,omitempty"`; AdditionalProperties map[string]interface{} }
 type CreateRecordResponse struct { Result *Record  `json:"result,omitempty"`;  AdditionalProperties map[string]interface{} }
 ```
-Note: `ListRecordResponse` has **no typed page/total field**; paginate with `_offset`/`_limit` until a short page
+`ListRecordResponse` has no typed page or total field. Paginate with `_offset`
+and `_limit` until a short page
 (or read `page` out of `AdditionalProperties` if present).
 
 ### `dnsdata.Record` (`dnsdata/model_record.go`, key fields verbatim)
@@ -429,12 +429,13 @@ https://github.com/infobloxopen/universal-ddi-go-client/blob/main/dnsdata/docs/R
 
 ### Live observations (read-only probe, 2026-09-13)
 - IDs: `dns/auth_zone/ae84c3c7-...`, `dns/view/f0e0aca3-...`, `dns/record/004226f0-...`.
-- `fqdn` and `absolute_name_spec` are returned **with trailing dot** (`example.com.`, `_tailscale-challenge.example.com.`);
+- `fqdn` and `absolute_name_spec` include a trailing dot (`example.com.`, `_tailscale-challenge.example.com.`);
   apex records have `name_in_zone: ""`.
 - CNAME: `rdata: {"cname": "sig1.dkim.example.com.at.icloudmailadmin.com."}` (trailing dot preserved).
 - TXT: `rdata: {"text": "v2=abc123..."}` and `dns_rdata: "\"v2=abc123...\""`. A record stored with
-  `text: "v=spf1 -all"` is presented as `dns_rdata: "\"v=spf1\" \"-all\""` — **UDDI splits unquoted whitespace in
-  `text` into separate character-strings**. To keep one string, the `text` value itself must carry the quotes
+  `text: "v=spf1 -all"` is presented as `dns_rdata: "\"v=spf1\" \"-all\""`.
+  UDDI splits unquoted whitespace in `text` into separate character-strings.
+  To keep one string, the `text` value itself must carry the quotes
   (`text: "\"v=spf1 -all\""`). The Terraform provider (`record_txt.go`) passes `text` through untouched (no quoting logic).
   https://github.com/infobloxopen/terraform-provider-bloxone/blob/master/internal/service/dns_data/record_txt.go
 
@@ -459,22 +460,20 @@ Terraform HCL confirms names: `rdata = { address = "10.0.0.10" }`, `rdata = { cn
 `rdata = { text = "example.com" }`, `rdata = { port = 80, priority = 10, target = "example.com", weight = 10 }`,
 `rdata = { exchange = "mail.example.com", preference = 10 }`; zone passed as `zone = bloxone_dns_auth_zone.example.id`.
 
----
-
 ## 4. Build tooling (Bazel, bzlmod)
 
 BCR `metadata.json` latest versions (queried 2026-09-13):
 
 | Module | Latest | Source |
 |---|---|---|
-| `rules_go` | **0.63.0** | https://github.com/bazelbuild/bazel-central-registry/blob/main/modules/rules_go/metadata.json |
-| `gazelle` | **0.54.0** | .../modules/gazelle/metadata.json |
-| `rules_oci` | **2.3.0** | .../modules/rules_oci/metadata.json |
-| `aspect_bazel_lib` | **2.22.5** | .../modules/aspect_bazel_lib/metadata.json |
-| `rules_pkg` | **1.3.0** | .../modules/rules_pkg/metadata.json |
-| `platforms` | **1.1.0** | .../modules/platforms/metadata.json |
-| `bazel_skylib` | **1.9.2** | .../modules/bazel_skylib/metadata.json |
-| `buildifier_prebuilt` | **8.5.1.4** | .../modules/buildifier_prebuilt/metadata.json |
+| `rules_go` | 0.63.0 | https://github.com/bazelbuild/bazel-central-registry/blob/main/modules/rules_go/metadata.json |
+| `gazelle` | 0.54.0 | .../modules/gazelle/metadata.json |
+| `rules_oci` | 2.3.0 | .../modules/rules_oci/metadata.json |
+| `aspect_bazel_lib` | 2.22.5 | .../modules/aspect_bazel_lib/metadata.json |
+| `rules_pkg` | 1.3.0 | .../modules/rules_pkg/metadata.json |
+| `platforms` | 1.1.0 | .../modules/platforms/metadata.json |
+| `bazel_skylib` | 1.9.2 | .../modules/bazel_skylib/metadata.json |
+| `buildifier_prebuilt` | 8.5.1.4 | .../modules/buildifier_prebuilt/metadata.json |
 | `tar.bzl` (used by rules_oci examples) | 0.10.8 | .../modules/tar.bzl/metadata.json |
 | `container_structure_test` | 1.22.1 | .../modules/container_structure_test/metadata.json |
 
@@ -500,16 +499,19 @@ use_repo(go_deps, "com_github_caarlos0_env_v11", "io_k8s_sigs_external_dns", ...
 - gazelle root `BUILD.bazel`: `load("@bazel_gazelle//:def.bzl", "gazelle")` / `# gazelle:prefix github.com/<org>/<repo>` /
   `gazelle(name = "gazelle")`; run `bazel run //:gazelle`. (With bzlmod the repo is `@gazelle`.)
   https://github.com/bazel-contrib/bazel-gazelle/blob/master/README.md
-- `go_deps` returns `extension_metadata(..., reproducible = True)` (`internal/bzlmod/go_deps.bzl`), so Bazel writes **no
-  go_deps entries into MODULE.bazel.lock**; go.mod/go.sum are the source of truth.
+- `go_deps` returns `extension_metadata(..., reproducible = True)` from
+  `internal/bzlmod/go_deps.bzl`, so Bazel writes no `go_deps` entries to
+  `MODULE.bazel.lock`. The Go module files remain the source of truth.
   https://github.com/bazel-contrib/bazel-gazelle/blob/master/internal/bzlmod/go_deps.bzl
 - rules_go 0.63.0 requires Go >= 1.20 toolchains; CI now tests "Bazel 8 and 9 via a matrix" (PR #4670).
-- **Bazel 9 gotcha:** rules_go 0.62.0 "crashes on Bazel 9 with duplicate mingw constraints" (issue #4665). Fixed in
+- rules_go 0.62.0 fails on Bazel 9 with duplicate MinGW constraints, as tracked
+  in issue #4665. Version 0.63.0 fixes the problem in
   0.63.0 `go/private/platforms.bzl` ("The two must not both be listed: since Bazel 8, `@bazel_tools//tools/cpp:mingw` is an
   alias..."); Bazel side fix bazelbuild/bazel#30488 targets 9.3.0. Use rules_go >= 0.63.0 on Bazel 9.x.
   https://github.com/bazel-contrib/rules_go/issues/4665
 - gazelle 0.54.0 declares `bazel_dep(name = "rules_go", version = "0.59.0")`; rules_go 0.63.0 declares
-  `bazel_dep(name = "gazelle", version = "0.51.3")` — both resolve upward to 0.63.0/0.54.0 via MVS. No open gazelle issues
+  `bazel_dep(name = "gazelle", version = "0.51.3")`. MVS resolves both to
+  rules_go 0.63.0 and gazelle 0.54.0. No open gazelle issues
   mention Bazel 9 breakage (searched 2026-09-13).
 - `go_cross_binary(name, target, platform, sdk_version, compilation_mode)` wraps a `go_binary` for another platform;
   rules_go platform labels: `@rules_go//go/toolchain:linux_amd64`, `@rules_go//go/toolchain:linux_arm64`.
@@ -558,27 +560,27 @@ oci_push(name = "push", image = ":image_multiarch", repository = "ghcr.io/<owner
   `sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` (linux/amd64 `sha256:52dcfbab...`,
   linux/arm64 `sha256:06c3c14b...`). Same digest the adguard Dockerfile pins. The `nonroot` image runs as uid/gid 65532.
 
----
-
 ## 5. Renovate
 
-- **`bazel-module` manager** (https://docs.renovatebot.com/modules/manager/bazel-module/): default
+- The `bazel-module` manager (https://docs.renovatebot.com/modules/manager/bazel-module/) uses the default
   `managerFilePatterns: ["/(^|/|\\.)MODULE\\.bazel$/"]`; updates `bazel_dep` (datasource `bazel`/BCR), `git_override`,
   `archive_override`, `single_version_override`, `git_repository`, `oci_pull`/`oci.pull` (datasource `docker`, fields
   `image`, `tag`, `digest`), `maven`, `crate.spec`, `rules_img_pull`. "The `bazel-module` manager updates the
-  `MODULE.bazel.lock` file when dependencies change" — requires an existing lockfile, Bazelisk, and `bazelModDeps` in
+  `MODULE.bazel.lock` file when dependencies change." This requires an existing lockfile, Bazelisk, and `bazelModDeps` in
   `allowedUnsafeExecutions`; it runs `bazel mod deps`. Since gazelle `go_deps` is reproducible, Go deps never enter the
   lockfile; only `bazel_dep` bumps touch it.
-- **`gomod` manager** (https://docs.renovatebot.com/modules/manager/gomod/): file pattern `/(^|/)go\.mod$/`; depTypes
-  `golang` (go directive — not bumped unless `rangeStrategy: "bump"`), `toolchain` (proposed by default), `require`,
+- The `gomod` manager (https://docs.renovatebot.com/modules/manager/gomod/) uses file pattern `/(^|/)go\.mod$/`; depTypes
+  `golang` (the Go directive is not updated unless `rangeStrategy: "bump"`), `toolchain` (proposed by default), `require`,
   `indirect` (disabled by default), `replace`, `tool`. Runs `go get` to refresh `go.sum`.
   `postUpdateOptions` (https://docs.renovatebot.com/configuration-options/#postupdateoptions): `gomodTidy` (runs
   `go mod tidy`), `gomodTidy1.17`, `gomodTidyE`, `gomodTidyAll`, `gomodUpdateImportPaths` ("Uses the `mod` tool to update
   import paths on major updates"), `gomodMassage`, `gomodVendor`, `gomodSkipVendor`.
-- Keeping Bazel `go_deps` in sync: nothing extra — `go_deps.from_file(go_mod="//:go.mod")` reads go.mod/go.sum at fetch
-  time. Only when a **new direct** dependency is added does `use_repo(go_deps, ...)` need `bazel mod tidy`
-  (automatic via `@rules_go//go` on Bazel >= 7.1.1); version bumps need nothing.
-- **`helpers:pinGitHubActionDigests`** (https://docs.renovatebot.com/presets-helpers/): "Pin `github-action` digests."
+- Bazel reads Go dependencies from `go.mod` and `go.sum` through
+  `go_deps.from_file(go_mod="//:go.mod")`, so version updates need no extra step.
+  Adding a direct dependency requires `bazel mod tidy`, which `@rules_go//go`
+  runs automatically on Bazel 7.1.1 and later.
+- The `helpers:pinGitHubActionDigests` preset (https://docs.renovatebot.com/presets-helpers/)
+  pins GitHub Action digests.
   ```json
   { "packageRules": [ { "matchDepTypes": ["action", "workflow"], "pinDigests": true } ] }
   ```
@@ -591,53 +593,26 @@ oci_push(name = "push", image = ":image_multiarch", repository = "ghcr.io/<owner
     "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"] }
   ```
 
----
+## Implemented design
 
-## Recommended design decisions
-
-1. Depend on `sigs.k8s.io/external-dns v0.22.0` and run the provider through upstream
-   `api.StartHTTPApi(p, startedChan, readTimeout, writeTimeout, "localhost:8888")` (hetzner/Absa pattern); add your own
-   `0.0.0.0:8080` mux with `/healthz` (200 only after `startedChan` fires) and `/metrics` (promhttp). This matches the
-   Helm chart (`http-webhook` = 8080, probes `/healthz`) with zero chart overrides.
-2. Config via `github.com/caarlos0/env/v11` with the de-facto env names (`SERVER_HOST`, `SERVER_PORT=8888`,
-   `HEALTHZ_HOST`, `HEALTHZ_PORT=8080`, `DOMAIN_FILTER`, `EXCLUDE_DOMAIN_FILTER`, `REGEXP_DOMAIN_FILTER`,
-   `REGEXP_DOMAIN_FILTER_EXCLUSION`, `DRY_RUN`) plus UDDI-specific `INFOBLOX_PORTAL_KEY`, `INFOBLOX_PORTAL_URL`
-   (the SDK already reads these), `UDDI_VIEW` (view **name**, resolved to `dns/view/<uuid>` at startup),
-   `UDDI_ZONE_FILTER` (optional). Use `log/slog` (JSON) unless you want logrus parity with upstream.
-3. Use `github.com/infobloxopen/universal-ddi-go-client v0.4.0` (not the deprecated bloxone client); construct with
-   `client.NewAPIClient(option.WithAPIKey, option.WithCSPUrl, option.WithClientName("external-dns-uddi-webhook"),
-   option.WithDefaultTags(...))`. Hide it behind a small interface (`ListZones`, `ListRecords`, `CreateRecord`,
-   `UpdateRecord`, `DeleteRecord`) so tests use a hand-written mock (adguard/hetzner/Absa all do this) with table tests + testify.
-4. Zone discovery: `AuthZoneAPI.List(ctx).Filter(fmt.Sprintf("view==%q", viewID)).Fields("id,fqdn,view,primary_type")`,
-   keep only `primary_type=="cloud"` zones whose `Fqdn` (trailing dot stripped) passes the `DomainFilter`; cache with a TTL.
-   Map endpoints to zones by longest-suffix match (Absa `findZone`). Return the `DomainFilter` on `GET /` so external-dns
-   pre-filters.
-5. Records: one `RecordAPI.List` per zone with `Filter("zone==\"dns/auth_zone/<id>\" and (type=='A' or type=='AAAA' or
-   type=='CNAME' or type=='TXT' or type=='SRV' or type=='MX' or type=='NS')")`, `Fields("id,absolute_name_spec,type,rdata,ttl,zone")`,
-   page with `Offset/Limit` (e.g. 1000) until a short page. Group by (name, type) into one `Endpoint` with multiple
-   `Targets`; strip the trailing dot from `absolute_name_spec` (external-dns names have none); keep the record IDs in an
-   in-memory index keyed by (name, type, target) for Update/Delete.
-6. Writes: create with `Record{AbsoluteNameSpec: &fqdnWithDot, View: &viewID, Type: &t, Rdata: ..., Ttl: ttl, Comment, Tags}`
-   (one UDDI record per target); updates = diff `UpdateOld` vs `UpdateNew` per (name,type) into create/delete of individual
-   targets (PATCH only to change TTL of an unchanged target; `zone`/`view` are immutable). Return 204 on success, 5xx on
-   transient SDK errors (so external-dns retries), 4xx on bad input; never 3xx.
-7. TXT handling: UDDI splits unquoted whitespace in `rdata.text` into multiple character-strings. In `AdjustEndpoints`
-   normalise every TXT target to the quoted form external-dns's registry already uses (`"..."`), write `text` **with** the
-   quotes, and on `Records()` return `text` as stored — both sides then agree and the plan stays stable (the registry
-   `strings.Trim`s quotes on parse). Set `ProviderSpecific`/TTL defaults in `AdjustEndpoints` too (e.g. TTL 0 -> zone default).
-8. rdata mapping: A/AAAA `{"address"}`, CNAME `{"cname": target + "."}`, TXT `{"text"}`, SRV
-   `{"priority","weight","port","target"}` parsed from the external-dns `"prio weight port host"` target, MX
-   `{"preference","exchange"}` from `"pref host"`, NS `{"dname"}`. Tag every record `external-dns=true` via
-   `option.WithDefaultTags` so the Portal UI shows ownership (the TXT registry remains the source of truth).
-9. Build with Bazel bzlmod: `rules_go 0.63.0` (required for Bazel 9.x), `gazelle 0.54.0`, `rules_oci 2.3.0`,
-   `rules_pkg 1.3.0` (or `tar.bzl`), `platforms 1.1.0`, `bazel_skylib 1.9.2`, `aspect_bazel_lib 2.22.5`,
-   `buildifier_prebuilt 8.5.1.4`; `go_sdk.from_file(go_mod="//:go.mod")` with `toolchain go1.26.6`; `pure="on"` static
-   binary; base `gcr.io/distroless/static-debian12:nonroot` pinned by digest; `oci_image_index` with rules_go platform
-   labels for linux/amd64+arm64; `oci_push` to `ghcr.io/<org>/external-dns-uddi-webhook` with stamped semver tags;
-   `container_structure_test` smoke test.
-10. Release/maintenance: release-please (`release-type: go`, `include-v-in-tag: true`) producing `vX.Y.Z` tags that trigger
-    `bazel run //:push` with tags `vX.Y.Z`, `vX.Y`, `latest`; cosign keyless + provenance attestation; Renovate with
-    `gomod` (`gomodTidy`, `gomodUpdateImportPaths`), `bazel-module` (bazel_dep + `oci.pull` digest), `github-actions` with
-    `helpers:pinGitHubActionDigests`. Document the Helm values snippet (`provider.name: webhook`,
-    `provider.webhook.image.repository`, `env[INFOBLOX_PORTAL_KEY from secret]`, default probes) and the recommended
-    `--txt-prefix=reg-%{record_type}.` so registry TXT records never collide with CNAMEs.
+1. The provider uses `api.StartHTTPApi` from ExternalDNS v0.22.0 on
+   `localhost:8888`. A separate listener exposes `/healthz` and `/metrics` on
+   port 8080, which matches the Helm chart defaults.
+2. `caarlos0/env` loads the standard webhook environment variables and the
+   UDDI-specific settings. The provider uses JSON logs from `log/slog`.
+3. A narrow interface wraps `universal-ddi-go-client`. Tests use an in-memory
+   implementation of that interface.
+4. The provider lists `cloud` primary zones in the configured view and caches
+   them. It selects the longest zone suffix that matches each endpoint.
+5. The provider lists supported records one zone at a time. It groups records
+   by name and type, then indexes each target by its record ID.
+6. Each target maps to one UDDI record. Updates create or delete target records
+   as needed and patch unchanged targets when only their TTL changes.
+7. `AdjustEndpoints` quotes TXT values before writing them. `Records` restores
+   the same form after the Portal removes the outer quotes.
+8. The provider maps A, AAAA, CNAME, TXT, SRV, MX, and NS rdata. It adds the
+   `external-dns=true` tag while the TXT registry remains the ownership record.
+9. Bazel builds a static Go binary and multi-architecture distroless image.
+   The base image and build dependencies are pinned.
+10. Release Please creates version tags. The release workflow publishes the
+    container image, and Renovate updates dependencies.

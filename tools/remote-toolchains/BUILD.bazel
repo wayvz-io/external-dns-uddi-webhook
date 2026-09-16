@@ -1,12 +1,6 @@
-# Execution platform for Remote Build Execution on the lab Buildbarn cluster.
-#
-# The Go toolchain is downloaded (rules_go SDK), so Bazel ships it to the
-# workers as an ordinary external repository; a vanilla Ubuntu act worker
-# executes the actions with no special preparation. Used by --config=remote
-# (see //.bazelrc). The lab scheduler advertises its x86 queue as the bare act
-# tag (no digest) plus an explicit cpu property, so the exec_properties are
-# matched verbatim to that queue -- change them and actions queue forever with
-# no matching worker.
+# Remote execution platform for the Wayvz Buildbarn cluster.
+# Bazel sends the rules_go SDK to an Ubuntu worker as an external repository.
+# The properties must match the scheduler's x86 queue exactly.
 platform(
     name = "remote_platform",
     constraint_values = [

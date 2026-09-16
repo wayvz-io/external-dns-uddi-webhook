@@ -1,16 +1,16 @@
-// Package uddi wraps the Infoblox Universal DDI API behind a small interface
-// that the provider (and tests) can depend on.
+// Package uddi defines the part of the Infoblox Universal DDI API used by the
+// provider and its tests.
 package uddi
 
 import "context"
 
 // Zone is an authoritative DNS zone in a view.
 type Zone struct {
-	// ID is the resource id, e.g. "dns/auth_zone/<uuid>".
+	// ID is the resource ID, for example "dns/auth_zone/<uuid>".
 	ID string
 	// FQDN is the zone name without trailing dot.
 	FQDN string
-	// ViewID is the owning view's resource id, e.g. "dns/view/<uuid>".
+	// ViewID is the owning view's resource ID.
 	ViewID string
 	// PrimaryType is "cloud" or "external".
 	PrimaryType string
@@ -18,11 +18,11 @@ type Zone struct {
 
 // Record is a single DNS resource record.
 type Record struct {
-	// ID is the resource id, e.g. "dns/record/<uuid>". Empty before creation.
+	// ID is the resource ID. It is empty before creation.
 	ID string
 	// Name is the absolute owner name without trailing dot.
 	Name string
-	// Type is the record type, e.g. "A".
+	// Type is the record type, for example "A".
 	Type string
 	// Rdata is the type-specific record data as accepted by the API.
 	Rdata map[string]any
@@ -42,8 +42,7 @@ type Record struct {
 type Client interface {
 	// ResolveView returns the resource id of the view with the given name.
 	ResolveView(ctx context.Context, name string) (string, error)
-	// ListZones returns all authoritative zones in the view that this
-	// installation may manage (primary_type == "cloud").
+	// ListZones returns the authoritative cloud-primary zones in the view.
 	ListZones(ctx context.Context, viewID string) ([]Zone, error)
 	// ListRecords returns all records of the zone.
 	ListRecords(ctx context.Context, zoneID string) ([]Record, error)

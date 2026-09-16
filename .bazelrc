@@ -59,7 +59,7 @@ build --action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:
 build --host_action_env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 build --incompatible_strict_action_env
 
-# Pure local / offline -- empties the remote endpoints so it wins over the
+# The local configuration clears the remote endpoints so it overrides the
 # default. `common` (not `build`) so `bazel mod graph --config=local` works too.
 # The PATH pins above are undone here. The shell pin stays: Bazel cannot reset
 # it to autodetect, so on NixOS (no /bin/bash) the devshell hook writes the

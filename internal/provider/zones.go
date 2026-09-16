@@ -16,8 +16,8 @@ type zoneCache struct {
 	client uddi.Client
 	viewID string
 	filter *endpoint.DomainFilter
-	// only, when non-empty, is the set of zone FQDNs (no trailing dot,
-	// lowercase) this cache is allowed to return.
+	// only contains the lowercase zone FQDNs this cache may return.
+	// The names do not have a trailing dot. An empty map allows every zone.
 	only map[string]bool
 	ttl  time.Duration
 	now  func() time.Time
@@ -42,13 +42,11 @@ func (c *zoneCache) get(ctx context.Context) ([]uddi.Zone, error) {
 		if z.FQDN == "" {
 			continue
 		}
-		// An explicit zone filter is absolute: it names the zones this provider
-		// may touch, so anything outside it is never listed or written.
+		// Never list or write a zone outside the explicit zone filter.
 		if c.only != nil && !c.only[strings.ToLower(strings.TrimSuffix(z.FQDN, "."))] {
 			continue
 		}
-		// Otherwise keep zones that are themselves in scope or are parents of a
-		// configured filter (e.g. filter "sub.example.com", zone "example.com").
+		// Keep matching zones and parents of a configured domain filter.
 		if c.filter.Match(z.FQDN) || c.filter.MatchParent(z.FQDN) {
 			zones = append(zones, z)
 		}

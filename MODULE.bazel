@@ -30,10 +30,9 @@ bazel_dep(name = "buildifier_prebuilt", version = "8.5.1.4", dev_dependency = Tr
 go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.from_file(go_mod = "//:go.mod")
 
-# go_deps reads go.mod/go.sum at fetch time and is `reproducible`, so Go modules
-# never enter MODULE.bazel.lock. Only the DIRECT deps are listed here; when a
-# new one is added to go.mod run `bazel mod tidy` (Bazel >= 7.1.1 also does it
-# automatically via `bazel run @rules_go//go -- mod tidy`).
+# go_deps reads go.mod and go.sum and does not add Go modules to
+# MODULE.bazel.lock. List direct dependencies here. After adding one to go.mod,
+# run `bazel mod tidy` or `bazel run @rules_go//go -- mod tidy`.
 go_deps = use_extension("@gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//:go.mod")
 use_repo(

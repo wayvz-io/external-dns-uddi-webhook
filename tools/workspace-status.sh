@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-# Workspace status command for stamped builds:
+# Workspace status command for stamped builds.
 #   bazel run --stamp --workspace_status_command=tools/workspace-status.sh //:push
 #
-# Emits STABLE_* keys (a change re-runs stamped actions, e.g. //:image_tags).
-# STABLE_GIT_TAG is set only when HEAD is exactly a tag -- from GITHUB_REF_NAME
-# in a tag-triggered workflow run, else `git describe --exact-match`.
+# STABLE_GIT_TAG is set only when HEAD is at a tag. Tag workflows use
+# GITHUB_REF_NAME; local runs use `git describe --exact-match`.
 set -euo pipefail
 
 tag=""

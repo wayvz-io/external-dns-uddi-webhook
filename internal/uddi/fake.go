@@ -11,9 +11,9 @@ import (
 // Call records one invocation on the Fake.
 type Call struct {
 	Method string
-	// Arg is the view name, view id, zone id or record id depending on Method.
+	// Arg is the view name, view ID, zone ID, or record ID used by Method.
 	Arg string
-	// Record is set for CreateRecord/UpdateRecord.
+	// Record is set for CreateRecord and UpdateRecord calls.
 	Record Record
 }
 
@@ -26,7 +26,7 @@ type Fake struct {
 	Views map[string]string
 	// Zones are the zones returned by ListZones (filtered by view id).
 	Zones []Zone
-	// Errors injects a failure for the named method ("ListZones", ...).
+	// Errors injects a failure for each named method.
 	Errors map[string]error
 
 	records map[string]Record
@@ -45,7 +45,7 @@ func NewFake() *Fake {
 	}
 }
 
-// FailWith injects err for the given method (pass nil to clear).
+// FailWith injects err for the method. A nil error clears the failure.
 func (f *Fake) FailWith(method string, err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

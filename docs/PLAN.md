@@ -1,18 +1,17 @@
-# Build and wire-up plan: external-dns-uddi-webhook
+# Design of external-dns-uddi-webhook
 
-Status: scaffold. Companion to `research-notes.md` (verified facts, sources) and
-`../README.md` (usage). This file is the "why and in what order".
+This document records the design and rollout decisions. See
+[`research-notes.md`](research-notes.md) for source material and the
+[README](../README.md) for deployment instructions.
 
 ## Goals
 
-1. Let ExternalDNS in a Kubernetes cluster publish Service / Ingress /
-   HTTPRoute hostnames into Infoblox Universal DDI (the Portal, served by the
-   NIOS-X host(s) authoritative for the zone) instead of a static DNS template.
-2. Keep the provider small: one static Go binary, env-only config, mocked SDK
-   in tests, no TSIG/zone-transfer plumbing.
-3. Same build/CI/release shape as the other wayvz repos (Bazel bzlmod on the
-   lab Buildbarn, Sonar on main, release-please, Renovate, SHA-pinned actions)
-   so there is nothing new to operate. See `DEVELOPMENT.md`.
+1. Publish Service, Ingress, and HTTPRoute hostnames from a Kubernetes cluster
+   to Infoblox Universal DDI instead of a static DNS template.
+2. Use one static Go binary, environment-variable configuration, and a mocked
+   SDK in tests. The provider does not use TSIG or zone transfers.
+3. Follow the build, CI, and release conventions used by other Wayvz
+   repositories. See the [development guide](DEVELOPMENT.md).
 
 ## Architecture
 
@@ -37,12 +36,12 @@ Status: scaffold. Companion to `research-notes.md` (verified facts, sources) and
                        clients / resolvers (split-DNS) ----------+
 ```
 
-The sidecar implements `provider.Provider` from `sigs.k8s.io/external-dns` and
-is served by upstream's `provider/webhook/api` package, so the HTTP contract is
-whatever the pinned external-dns version expects. It translates endpoints to
-UDDI `dns/record` objects via `universal-ddi-go-client`, one UDDI record per
-target, zone chosen by longest-suffix match against the `cloud`-primary auth
-zones in the configured view.
+The sidecar implements `provider.Provider` from `sigs.k8s.io/external-dns`.
+The upstream `provider/webhook/api` package serves the interface, so the pinned
+ExternalDNS version defines the HTTP contract. The provider converts each
+target to one UDDI `dns/record` through `universal-ddi-go-client`. It selects
+the `cloud` primary authoritative zone with the longest matching suffix in the
+configured view.
 
 ## Repo layout
 
@@ -61,40 +60,40 @@ deploy/kustomize/                         EXAMPLE manifests (not applied from he
 docs/                                     this plan, development guide, research notes
 ```
 
-## Security model (no zone transfers, no TSIG)
+## Security model
 
 - Writes go to the Portal API over HTTPS with an API key scoped to DNS data
   read/write on the configured view; the key lives in Vault and reaches the
   pod through a `VaultStaticSecret` (path/role decided by the GitOps repo
   managing the deployment). NIOS-X never sees credentials; it only receives
   config from the Portal.
-- The managed zone should be a dedicated `cloud`-primary auth zone under its
-  own view. `--domain-filter` plus the provider's own `DOMAIN_FILTER`
-  (returned on `GET /`) mean ExternalDNS can neither read nor write anything
-  outside it, even with a broader key.
-- Ownership is the TXT registry (`--txt-owner-id`, `--txt-prefix`); records
-  without a matching owner TXT are never touched, so hand-made or
-  Terraform-made records in the same zone are safe. Records are additionally
-  tagged `external-dns=true` for the Portal UI.
+- Use a dedicated `cloud` primary authoritative zone in its own view.
+  `--domain-filter` and the provider's `DOMAIN_FILTER`, returned by `GET /`,
+  prevent ExternalDNS from reading or writing names outside that zone.
+- The TXT registry tracks ownership through `--txt-owner-id` and
+  `--txt-prefix`. ExternalDNS does not change records without its matching TXT
+  record. The provider also adds the `external-dns=true` Portal tag.
 - CNAMEs that point friendly names in a parent zone at the managed sub-zone
   should stay under separate infra-as-code management; ExternalDNS never
   writes to the parent zone.
-- Container: distroless static, `nonroot` (65532), read-only rootfs, all caps
-  dropped; 8888 bound to localhost, only 8080 (health/metrics) exposed.
+- The distroless container runs as `nonroot` with UID 65532. Its root
+  filesystem is read-only and it has no Linux capabilities. The webhook API
+  binds to localhost on port 8888. Only the health and metrics listener on port
+  8080 is exposed.
 
 ## Suggested rollout
 
-0. **Probe.** Point a dev copy at a scratch zone (or a test view) with
+0. Point a development instance at a scratch zone or test view with
    `DRY_RUN=false` and a source that only yields `probe_delete_me*` names.
    Confirm create/update/delete round-trips, TXT quoting stability (no
    perpetual diffs), and that the Portal shows the `external-dns=true` tag.
    Delete the zone afterwards.
-1. **Mirror.** Deploy for real against the target zone while the previous DNS
+1. Deploy against the target zone while the previous DNS
    mechanism keeps serving it. Compare the record set against what it answers.
-2. **Cutover.** Delegate/forward the zone to the NIOS-X host(s) on the
+2. Delegate or forward the zone to the NIOS-X hosts on the
    relevant resolvers. Watch the provider's `/metrics` (API errors, plan
    sizes) and external-dns logs for a few days.
-3. **Retire.** Remove the previous DNS mechanism for the sub-zone; keep any
+3. Remove the previous DNS mechanism for the sub-zone. Keep any
    parent-zone CNAMEs under their existing management.
 
 ## Open questions

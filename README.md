@@ -1,32 +1,37 @@
 # external-dns-uddi-webhook
 
 [ExternalDNS](https://github.com/kubernetes-sigs/external-dns) webhook provider
-for **Infoblox Universal DDI** (the Infoblox Portal / NIOS-X). Runs as a sidecar
-next to `external-dns` and turns its record changes into Portal `dns/record`
-calls. Static Go binary on distroless, multi-arch.
+for Infoblox Universal DDI, also known as the Infoblox Portal or NIOS-X. The
+webhook runs beside `external-dns` and sends its record changes to the Portal
+`dns/record` API.
 
-Image: `ghcr.io/wayvz-io/external-dns-uddi-webhook` (tags `vX.Y.Z`, `vX.Y`, `latest`; linux/amd64 + linux/arm64)
+The container image is
+`ghcr.io/wayvz-io/external-dns-uddi-webhook`. Releases publish the `vX.Y.Z`,
+`vX.Y`, and `latest` tags for `linux/amd64` and `linux/arm64`.
 
-## Configuration (environment)
+## Configure the webhook
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `INFOBLOX_PORTAL_KEY` | required | Portal API key (DNS data read/write on the view) |
+| `INFOBLOX_PORTAL_KEY` | required | Portal API key with DNS data read and write access to the view |
 | `INFOBLOX_PORTAL_URL` | `https://csp.infoblox.com` | Portal base URL |
-| `UDDI_VIEW` | required | DNS view **name**; resolved to its id at startup |
-| `UDDI_ZONE_FILTER` | | Optional comma list of zone FQDNs; when set, only these zones are listed or written |
-| `DOMAIN_FILTER` | | Comma list of domains; also returned to external-dns on `GET /` |
-| `EXCLUDE_DOMAIN_FILTER` | | Domains to exclude |
-| `REGEXP_DOMAIN_FILTER` / `REGEXP_DOMAIN_FILTER_EXCLUSION` | | Regex variants |
-| `SERVER_HOST` / `SERVER_PORT` | `localhost` / `8888` | Webhook API (keep on localhost) |
-| `HEALTHZ_HOST` / `HEALTHZ_PORT` | `0.0.0.0` / `8080` | `/healthz` and `/metrics` |
+| `UDDI_VIEW` | required | DNS view name. The webhook resolves the name to an ID at startup. |
+| `UDDI_ZONE_FILTER` | | Optional comma-separated list of zone FQDNs. The webhook lists and writes only these zones. |
+| `DOMAIN_FILTER` | | Comma-separated list of domains. The webhook also returns this list from `GET /`. |
+| `EXCLUDE_DOMAIN_FILTER` | | Comma-separated list of domains to exclude |
+| `REGEXP_DOMAIN_FILTER` | | Regular expression that selects domains |
+| `REGEXP_DOMAIN_FILTER_EXCLUSION` | | Regular expression that excludes domains |
+| `SERVER_HOST` | `localhost` | Webhook API host. Keep this listener on localhost. |
+| `SERVER_PORT` | `8888` | Webhook API port |
+| `HEALTHZ_HOST` | `0.0.0.0` | Health and metrics host |
+| `HEALTHZ_PORT` | `8080` | Port for `/healthz` and `/metrics` |
 | `DRY_RUN` | `false` | Log changes instead of applying them |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
+| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, or `error` |
 
-Record types: A, AAAA, CNAME, TXT, SRV, MX, NS. Records are tagged
-`external-dns=true` in the Portal; ownership is the ExternalDNS TXT registry.
-An explicit TTL (annotation or `UDDI_DEFAULT_TTL`) is written as an override of
-the zone default; without one the record inherits it.
+The provider manages A, AAAA, CNAME, TXT, SRV, MX, and NS records. It adds the
+`external-dns=true` Portal tag and uses the ExternalDNS TXT registry to track
+ownership. A TTL from an annotation or `UDDI_DEFAULT_TTL` overrides the zone
+default. Records without an explicit TTL inherit the zone default.
 
 ## Deploy with the upstream Helm chart
 
@@ -60,13 +65,14 @@ policy: sync
 interval: 1m
 ```
 
-The chart already probes `/healthz` on port 8080 of the `webhook` container.
-`deploy/kustomize/` has the equivalent raw manifests as a reviewable example.
+The chart probes `/healthz` on port 8080 of the `webhook` container. The
+[`deploy/kustomize`](deploy/kustomize) directory contains equivalent Kubernetes
+manifests for review or adaptation.
 
 ## Development
 
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for building, testing, and
-releasing this project.
+See the [development guide](docs/DEVELOPMENT.md) to build, test, or release the
+project.
 
 ## Licence
 

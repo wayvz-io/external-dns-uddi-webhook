@@ -8,9 +8,8 @@ on:
   schedule:
     - cron: "27 3 * * 1" # Mondays 03:27 UTC
 
-# build-mode: manual for Go so the extractor sees a real `go build ./...` with
-# the pinned toolchain (autobuild would download its own). Actions workflows
-# are analyzed with build-mode none.
+# Build Go manually with the pinned toolchain. CodeQL analyzes Actions without
+# a build step.
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})

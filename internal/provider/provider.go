@@ -26,17 +26,15 @@ type Config struct {
 	View         string
 	DomainFilter *endpoint.DomainFilter
 	DryRun       bool
-	// DefaultTTL is applied in AdjustEndpoints to endpoints without a TTL;
-	// 0 leaves the TTL unset so UDDI uses the zone default.
+	// DefaultTTL applies to endpoints without a TTL. Zero uses the zone default.
 	DefaultTTL    int64
 	RecordComment string
 	Tags          map[string]string
 	ZoneCacheTTL  time.Duration
-	// ZoneFilter optionally restricts the managed zones by FQDN; empty means no
-	// restriction beyond the domain filter.
+	// ZoneFilter restricts managed zones by FQDN. Empty uses the domain filter alone.
 	ZoneFilter []string
 	Logger     *slog.Logger
-	// Now overrides the clock (tests).
+	// Now overrides the clock in tests.
 	Now func() time.Time
 }
 
@@ -146,15 +144,15 @@ func (p *Provider) Records(ctx context.Context) ([]*endpoint.Endpoint, error) {
 	return b.order, nil
 }
 
-// recordBuilder folds UDDI records into external-dns endpoints and the
-// (name,type,target) -> record-id index Records() populates.
+// recordBuilder groups UDDI records into ExternalDNS endpoints and builds the
+// record ID index used by Records.
 type recordBuilder struct {
 	order  []*endpoint.Endpoint
 	groups map[recordKey]*endpoint.Endpoint
 	index  map[recordKey]indexEntry
 }
 
-// add folds one record from zoneID into the builder, skipping unsupported
+// add adds one record from zoneID, skipping unsupported
 // types, names outside the domain filter, or records with unreadable rdata.
 func (b *recordBuilder) add(zoneID string, rec uddi.Record, filter *endpoint.DomainFilter, log *slog.Logger) {
 	if !supportedType(rec.Type) {
@@ -171,9 +169,8 @@ func (b *recordBuilder) add(zoneID string, rec uddi.Record, filter *endpoint.Dom
 	}
 	b.index[keyOf(name, rec.Type, target)] = indexEntry{id: rec.ID, zoneID: zoneID}
 	if rec.Type == endpoint.RecordTypeTXT {
-		// The Portal stores a single character-string without its quotes;
-		// hand it back in the quoted form AdjustEndpoints and the TXT
-		// registry produce, or every TXT would plan as an update forever.
+		// The Portal removes quotes from a single character-string. Restore
+		// them so the value matches the TXT registry and AdjustEndpoints.
 		target = quoteTXT(target)
 	}
 	gk := keyOf(name, rec.Type, "")
@@ -189,8 +186,8 @@ func (b *recordBuilder) add(zoneID string, rec uddi.Record, filter *endpoint.Dom
 	ep.Targets = append(ep.Targets, target)
 }
 
-// AdjustEndpoints implements provider.Provider: it drops unsupported record
-// types, normalises TXT quoting and applies the default TTL.
+// AdjustEndpoints drops unsupported record types, normalizes TXT quoting, and
+// applies the default TTL.
 func (p *Provider) AdjustEndpoints(endpoints []*endpoint.Endpoint) ([]*endpoint.Endpoint, error) {
 	out := make([]*endpoint.Endpoint, 0, len(endpoints))
 	for _, ep := range endpoints {
@@ -262,10 +259,8 @@ func (p *Provider) ApplyChanges(ctx context.Context, changes *plan.Changes) erro
 	return nil
 }
 
-// applyOne applies a single change and updates metrics/logs for it. abort
-// reports a retryable infrastructure failure that should stop the whole
-// batch; a non-nil err with abort false is a rejected change to collect as a
-// soft error and keep going.
+// applyOne applies one change and records its log and metrics. abort reports a
+// retryable failure that stops the batch. Other errors reject only this change.
 func (p *Provider) applyOne(ctx context.Context, zones []uddi.Zone, op change) (abort bool, err error) {
 	log := p.log.With("action", string(op.action), "name", op.ep.DNSName, "type", op.ep.RecordType, "target", op.target)
 	if !supportedType(op.ep.RecordType) {
@@ -308,14 +303,13 @@ func changeKey(ep *endpoint.Endpoint) epKey {
 	return epKey{strings.ToLower(strings.TrimSuffix(ep.DNSName, ".")), ep.RecordType, ep.SetIdentifier}
 }
 
-// planChanges flattens plan.Changes into per-target operations, ordered
-// deletes -> updates -> creates so CNAME/A conflicts resolve cleanly.
+// planChanges converts plan.Changes to per-target operations. It orders deletes
+// before updates and creates so CNAME and address record conflicts can resolve.
 func planChanges(changes *plan.Changes) []change {
 	old := indexByKey(changes.UpdateOld)
 	creates, updates, deletes := diffUpdates(changes.UpdateNew, old)
-	// Anything still in old after diffUpdates had no UpdateNew match by key,
-	// so the whole endpoint is going away; iterate UpdateOld again (rather
-	// than the map) to keep the output order deterministic.
+	// Entries left in old have no UpdateNew match. Iterate UpdateOld again to
+	// keep their deletion order deterministic.
 	deletes = append(deletes, unmatchedDeletes(changes.UpdateOld, old)...)
 	deletes = append(deletes, deletesFromAll(changes.Delete)...)
 	creates = append(creates, createsFromAll(changes.Create)...)
@@ -327,9 +321,8 @@ func planChanges(changes *plan.Changes) []change {
 	return out
 }
 
-// diffUpdates matches each UpdateNew endpoint against old by key, removing
-// matches from old as it goes, and returns the resulting creates/updates/
-// deletes.
+// diffUpdates matches UpdateNew endpoints against old by key. It removes each
+// match from old and returns the required creates, updates, and deletes.
 func diffUpdates(updateNew []*endpoint.Endpoint, old map[epKey]*endpoint.Endpoint) (creates, updates, deletes []change) {
 	for _, ep := range updateNew {
 		if ep == nil {
@@ -350,8 +343,8 @@ func diffUpdates(updateNew []*endpoint.Endpoint, old map[epKey]*endpoint.Endpoin
 	return creates, updates, deletes
 }
 
-// unmatchedDeletes returns deletes for the UpdateOld endpoints still present
-// in old (i.e. diffUpdates found no UpdateNew counterpart for them).
+// unmatchedDeletes returns deletes for UpdateOld endpoints without an
+// UpdateNew counterpart.
 func unmatchedDeletes(updateOld []*endpoint.Endpoint, old map[epKey]*endpoint.Endpoint) []change {
 	var out []change
 	for _, ep := range updateOld {
@@ -411,8 +404,7 @@ func deletesFor(ep *endpoint.Endpoint) []change {
 	return out
 }
 
-// diffTargets compares an endpoint's previous and new target lists and
-// returns the creates/updates/deletes needed to converge prev into ep.
+// diffTargets returns the operations that change prev's targets into ep's.
 func diffTargets(prev, ep *endpoint.Endpoint) (creates, updates, deletes []change) {
 	oldTargets := targetSet(prev.Targets)
 	newTargets := targetSet(ep.Targets)
@@ -484,7 +476,7 @@ func (p *Provider) applyUpdate(ctx context.Context, zone uddi.Zone, op change) e
 		return err
 	}
 	if id == "" {
-		// The record we meant to retune does not exist; create it instead.
+		// Create the record if it disappeared after the plan was built.
 		return p.applyCreate(ctx, zone, op)
 	}
 	rdata, err := toRdata(op.ep.RecordType, op.target)
@@ -529,8 +521,8 @@ func (p *Provider) applyDelete(ctx context.Context, zone uddi.Zone, op change) e
 	return nil
 }
 
-// lookupID finds the record id for (name,type,target), refreshing the index
-// for the zone on a miss. Returns "" when the record does not exist.
+// lookupID finds a record ID by name, type, and target. It refreshes the zone
+// index after a miss and returns an empty string if the record does not exist.
 func (p *Provider) lookupID(ctx context.Context, zone uddi.Zone, name, typ, target string) (string, error) {
 	k := keyOf(name, typ, target)
 	p.mu.Lock()
@@ -585,9 +577,8 @@ func (p *Provider) apiErr(err error) error {
 	return err
 }
 
-// keyOf identifies one (name, type, target) record. TXT targets are keyed in
-// their unquoted form: the Portal returns the text without the quotes the
-// registry sent, and a delete or update for that record arrives quoted.
+// keyOf identifies one record by name, type, and target. It removes TXT quotes
+// because the Portal stores unquoted text while registry changes use quotes.
 func keyOf(name, typ, target string) recordKey {
 	if typ == endpoint.RecordTypeTXT {
 		target = unquoteTXT(target)
@@ -603,8 +594,7 @@ func ttlPtr(ttl endpoint.TTL) *int64 {
 	return &v
 }
 
-// inputError marks a change that can never succeed (bad target syntax) so it
-// is reported as soft instead of aborting the batch.
+// inputError marks invalid target syntax so one bad change does not stop the batch.
 type inputError struct{ err error }
 
 func (e *inputError) Error() string { return "invalid input: " + e.err.Error() }

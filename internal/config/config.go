@@ -20,7 +20,7 @@ import (
 
 const redacted = "[REDACTED]"
 
-// Config is the full runtime configuration of the webhook.
+// Config contains the webhook's runtime configuration.
 type Config struct {
 	ServerHost         string        `env:"SERVER_HOST" envDefault:"localhost"`
 	ServerPort         int           `env:"SERVER_PORT" envDefault:"8888"`
@@ -42,16 +42,16 @@ type Config struct {
 	PortalKey string `env:"INFOBLOX_PORTAL_KEY"`
 	PortalURL string `env:"INFOBLOX_PORTAL_URL" envDefault:"https://csp.infoblox.com"`
 
-	// View is the DNS view *name*; it is resolved to a resource id at startup.
+	// View is the DNS view name. The provider resolves it to a resource ID at startup.
 	View string `env:"UDDI_VIEW" envDefault:"default"`
-	// ZoneFilter optionally restricts which auth zones are managed, by FQDN.
+	// ZoneFilter restricts managed authoritative zones by FQDN.
 	// Empty means every zone in the view that the domain filter allows.
 	ZoneFilter    []string      `env:"UDDI_ZONE_FILTER"`
 	ZoneCacheTTL  time.Duration `env:"UDDI_ZONE_CACHE_TTL" envDefault:"5m"`
 	PageLimit     int           `env:"UDDI_PAGE_LIMIT" envDefault:"1000"`
 	DefaultTTL    int64         `env:"UDDI_DEFAULT_TTL" envDefault:"0"`
 	RecordComment string        `env:"UDDI_RECORD_COMMENT" envDefault:"managed by external-dns"`
-	// RawTags is the UDDI_TAGS list of key=value pairs; use Tags() for the parsed map.
+	// RawTags contains UDDI_TAGS entries in key=value form. Tags parses the entries.
 	RawTags []string `env:"UDDI_TAGS" envDefault:"external-dns=true"`
 }
 
@@ -86,8 +86,7 @@ func (c *Config) Validate() error {
 	return errors.Join(errs...)
 }
 
-// validateServer checks the HTTP-server-facing settings: listen addresses,
-// timeouts and logging.
+// validateServer checks listener, timeout, and logging settings.
 func (c *Config) validateServer() []error {
 	var errs []error
 	if err := validatePort("SERVER_PORT", c.ServerPort); err != nil {
@@ -116,7 +115,7 @@ func (c *Config) validateServer() []error {
 	return errs
 }
 
-// validateUDDI checks the Infoblox Portal / Universal DDI settings.
+// validateUDDI checks the Infoblox Portal settings.
 func (c *Config) validateUDDI() []error {
 	var errs []error
 	if c.PortalKey == "" {
@@ -147,7 +146,7 @@ func validatePort(name string, port int) error {
 	return nil
 }
 
-// Tags parses UDDI_TAGS (key=value entries) into a map.
+// Tags parses the UDDI_TAGS entries into a map.
 func (c *Config) Tags() (map[string]string, error) {
 	tags := make(map[string]string, len(c.RawTags))
 	for _, raw := range c.RawTags {
@@ -189,8 +188,8 @@ func (c *Config) DomainFilterSpec() (*endpoint.DomainFilter, error) {
 	return endpoint.NewDomainFilterWithExclusions(clean(c.IncludeDomains), clean(c.ExcludeDomains)), nil
 }
 
-// DomainFilter returns the compiled domain filter. It panics only if Validate
-// was skipped and the regexes are invalid; call Validate (or Load) first.
+// DomainFilter returns the compiled domain filter. It panics if invalid regular
+// expressions bypass Validate. Call Validate or Load first.
 func (c *Config) DomainFilter() *endpoint.DomainFilter {
 	df, err := c.DomainFilterSpec()
 	if err != nil {

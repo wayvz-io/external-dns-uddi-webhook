@@ -1,35 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Buildifier strict lint check (formatting + linting) for external-dns-uddi-webhook.
+# Check build-file formatting and lint rules with Buildifier.
 
 echo "Running strict buildifier checks (formatting + linting)..."
 
-# Resolve the buildifier binary. Prefer a hermetic binary passed as $1 (the
-# Bazel test/binary rule supplies @buildifier_prebuilt//:buildifier), so this
-# runs on a bare runner without nix. Resolve to an absolute path now, before
-# any cd below changes the working directory. Fall back to PATH (nix dev-shell).
+# Bazel passes its pinned Buildifier binary as $1. Resolve it before changing
+# directories. If $1 is absent, use Buildifier from PATH.
 BUILDIFIER=""
 if [ "${1:-}" != "" ] && [ -e "${1}" ]; then
     BUILDIFIER="$(cd "$(dirname "${1}")" && pwd)/$(basename "${1}")"
 fi
 
-# Find the source directory (when running from Bazel runfiles)
+# Find the source directory when running from Bazel runfiles.
 if [[ $(pwd) == *"runfiles"* ]]; then
     echo "Running from Bazel runfiles, looking for source directory..."
     if [ -n "${BUILD_WORKSPACE_DIRECTORY:-}" ]; then
         cd "$BUILD_WORKSPACE_DIRECTORY"
         echo "Using BUILD_WORKSPACE_DIRECTORY: $(pwd)"
     else
-        # In test environment, run buildifier on the runfiles directory, which
-        # contains the BUILD and .bzl files as test data.
+		# The test runfiles directory contains the BUILD and .bzl test data.
         echo "Running buildifier on test data files in current directory..."
     fi
 fi
 
-# Prefer a buildifier already on PATH (e.g. the nix dev-shell binary, which runs
-# natively on the host -- including NixOS). Otherwise use the hermetic binary
-# resolved above, which is what a bare runner / CI without a host buildifier uses.
+# Prefer Buildifier from PATH, including the Nix development-shell binary.
+# Otherwise, use the pinned binary passed by Bazel.
 if command -v buildifier &> /dev/null; then
     BUILDIFIER="buildifier"
 elif [ -n "$BUILDIFIER" ]; then

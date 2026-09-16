@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
-# Run SonarQube analysis via the Bazel-provisioned sonar-scanner
-# (//tools/sonar:scan). This script is the credential front-end only.
-# Same entrypoint for CI and local:
-#   - CI:    SONAR_HOST_URL + SONAR_TOKEN come from the environment (GH Actions
-#            maps SONAR_TOKEN <- Vault kv/sonarqube/default/user-token via
-#            the GitHub OIDC JWT role; the host URL is the in-cluster Service).
-#   - Local: falls back to 1Password (op://k8s-dev/sonarqube/{website,user-token}).
-# Hard-errors loudly if neither resolves -- no silent fallback.
+# Run the Bazel-provided SonarScanner with CI or local credentials.
+# CI sets SONAR_HOST_URL and SONAR_TOKEN. Local runs read missing values from
+# 1Password at op://k8s-dev/sonarqube/{website,user-token}.
 #
-# Expects target/sonar/go-coverage.out (scripts/merge-go-coverage.sh) to exist;
-# the scan still runs without it, Sonar just reports no coverage.
+# Without target/sonar/go-coverage.out, Sonar reports no coverage.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -34,17 +28,17 @@ if [[ -z "$host" || -z "$token" ]]; then
 fi
 
 if ! command -v bazel >/dev/null 2>&1; then
-  echo "error: bazel not on PATH -- run this inside 'nix develop'." >&2
+  echo "error: bazel not on PATH; run this inside 'nix develop'" >&2
   exit 1
 fi
 
 if [[ ! -s target/sonar/go-coverage.out ]]; then
-  echo "warning: target/sonar/go-coverage.out missing -- run 'bazel coverage //...' then scripts/merge-go-coverage.sh first." >&2
+  echo "warning: target/sonar/go-coverage.out missing; generate coverage before scanning" >&2
 fi
 
 args=()
 [[ -n "${SONAR_PROJECT_KEY:-}" ]] && args+=(-Dsonar.projectKey="$SONAR_PROJECT_KEY")
 
-# The scanner is a local `bazel run` (no remote execution needed): --config=local.
+# Run the scanner locally because it analyzes files in this workspace.
 SONAR_HOST_URL="$host" SONAR_TOKEN="$token" \
   exec bazel run --config=local //tools/sonar:scan -- "${args[@]}"
