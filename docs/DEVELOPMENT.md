@@ -64,9 +64,10 @@ downloads the artifact and runs `bazel run --config=local //tools/sonar:scan`;
 the scanner is a JRE-bundled `http_archive`, so no Java or devshell is needed.
 The job exchanges its GitHub OIDC token for a short-lived Vault token (JWT role
 `external-dns-uddi-webhook-ci`) and reads the shared SonarQube user token, so
-the repo holds no secrets. SonarQube is the static-analysis gate; CodeQL is
-not run because GitHub Advanced Security is unavailable on a private repo.
-Re-add `codeql.yml` when the repo goes public. SonarQube is the static analysis / quality gate for this repo.
+the repo holds no secrets. SonarQube is the static-analysis / quality gate for
+this repo. `codeql.yml` (GitHub-hosted runner, Go + Actions, weekly + on
+push/PR to main) runs alongside it now that the repo is public and GitHub
+Advanced Security is available.
 
 ### Release flow
 

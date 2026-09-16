@@ -36,7 +36,7 @@ provider:
   webhook:
     image:
       repository: ghcr.io/wayvz-io/external-dns-uddi-webhook
-      tag: v0.1.0
+      tag: v0.2.0
     env:
       - name: INFOBLOX_PORTAL_KEY
         valueFrom:
