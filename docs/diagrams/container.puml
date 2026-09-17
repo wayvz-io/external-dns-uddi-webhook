@@ -1,0 +1,29 @@
+@startuml container
+
+!include <C4/C4_Container>
+
+title external-dns Universal DDI webhook - Container diagram
+
+LAYOUT_LEFT_RIGHT()
+
+Person(dnsClient, "DNS client", "Resolves a Kubernetes hostname")
+
+System_Ext(kubernetesApi, "Kubernetes API", "Stores Services, Ingresses, HTTPRoutes, and other configured sources")
+
+System_Boundary(integration, "external-dns UDDI integration") {
+    Container(externalDns, "ExternalDNS", "Go", "Watches Kubernetes resources, calculates the desired DNS state, and owns records through TXT records")
+    Container(webhook, "Universal DDI webhook", "Go, HTTP/JSON", "Runs in the ExternalDNS pod and translates the webhook protocol into Universal DDI API operations")
+}
+
+System_Ext(portalApi, "Universal DDI Portal API", "Stores authoritative zones and DNS records")
+System_Ext(dnsServer, "Authoritative DNS server", "NIOS-X or another Universal DDI DNS host that serves the published zones")
+
+Rel(externalDns, kubernetesApi, "Lists and watches configured sources", "Kubernetes API")
+Rel(externalDns, webhook, "Lists records and submits record changes", "HTTP/JSON on localhost:8888")
+Rel(webhook, portalApi, "Lists zones and records; creates, updates, and deletes records", "HTTPS")
+Rel(portalApi, dnsServer, "Distributes authoritative zone data")
+Rel(dnsClient, dnsServer, "Queries hostnames", "DNS")
+
+SHOW_LEGEND()
+
+@enduml

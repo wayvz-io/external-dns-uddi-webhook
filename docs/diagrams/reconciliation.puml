@@ -1,0 +1,64 @@
+@startuml reconciliation
+
+title ExternalDNS reconciliation through Universal DDI
+
+participant "Kubernetes API" as Kubernetes
+participant "ExternalDNS" as ExternalDNS
+participant "UDDI webhook\nlocalhost:8888" as Webhook
+participant "Universal DDI\nPortal API" as Portal
+
+== Provider initialization ==
+
+ExternalDNS -> Webhook: GET /
+Webhook --> ExternalDNS: Configured domain filter
+
+== Reconciliation ==
+
+loop Every synchronization interval
+    ExternalDNS -> Kubernetes: Read configured sources
+    Kubernetes --> ExternalDNS: Services, Ingresses, HTTPRoutes,\nand other resources
+    ExternalDNS -> ExternalDNS: Build desired endpoints
+
+    ExternalDNS -> Webhook: GET /records
+
+    opt Zone cache has expired
+        Webhook -> Portal: List cloud-primary zones\nin the configured view
+        Portal --> Webhook: Authoritative zones
+        Webhook -> Webhook: Apply domain and zone filters
+    end
+
+    loop For each allowed zone
+        Webhook -> Portal: List DNS records
+        Portal --> Webhook: Zone records
+    end
+
+    Webhook -> Webhook: Group UDDI records into\nExternalDNS endpoints
+    Webhook --> ExternalDNS: Current endpoints
+
+    ExternalDNS -> Webhook: POST /adjustendpoints\nwith desired endpoints
+    Webhook -> Webhook: Drop unsupported types, normalize TXT values,\nand apply the default TTL
+    Webhook --> ExternalDNS: Adjusted endpoints
+
+    ExternalDNS -> ExternalDNS: Apply TXT ownership and\nbuild the change plan
+
+    alt Changes are required
+        ExternalDNS -> Webhook: POST /records\nwith create, update, and delete changes
+        Webhook -> Webhook: Select the longest-matching zone,\nexpand targets, and order operations
+
+        loop For each record operation
+            Webhook -> Portal: Create, update, or delete one record
+            Portal --> Webhook: Operation result
+        end
+
+        Webhook --> ExternalDNS: Change result
+    else No changes are required
+        ExternalDNS -> ExternalDNS: Finish synchronization
+    end
+end
+
+note over ExternalDNS, Webhook
+DNS queries do not pass through
+ExternalDNS or the webhook.
+end note
+
+@enduml

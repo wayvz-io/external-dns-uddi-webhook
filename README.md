@@ -9,25 +9,41 @@ The container image is
 `ghcr.io/wayvz-io/external-dns-uddi-webhook`. Releases publish the `vX.Y.Z`,
 `vX.Y`, and `latest` tags for `linux/amd64` and `linux/arm64`.
 
-## How records reach Universal DDI
+## How it fits together
 
 ExternalDNS reads Services, Ingresses, HTTPRoutes, and the other configured
-Kubernetes sources. It converts them to desired DNS endpoints, then talks to
-this sidecar over the ExternalDNS webhook protocol on `localhost:8888`.
+Kubernetes sources. The webhook runs beside ExternalDNS in the same pod and
+translates the webhook protocol into Universal DDI API requests.
 
-For each synchronization:
+![C4 Container diagram showing ExternalDNS and the Universal DDI webhook in a Kubernetes pod, connected to the Kubernetes API and Universal DDI](docs/diagrams/container.svg)
 
-1. The sidecar lists the `cloud` primary zones in the configured UDDI view.
-2. It reads the current records from the zone with the longest matching DNS
-   suffix.
-3. ExternalDNS compares those records with the Kubernetes endpoints.
-4. The sidecar creates, updates, or deletes UDDI records through the Portal.
-5. The Portal sends the configuration to the NIOS-X servers that answer for
-   the zone.
+*ExternalDNS and the webhook manage records through the Portal API. DNS clients
+query the authoritative DNS servers directly. [PlantUML source](docs/diagrams/container.puml).*
+
+## How changes flow
+
+ExternalDNS owns the reconciliation loop. The webhook reads the current
+Universal DDI records, adjusts desired endpoints for provider rules, and
+applies the change plan that ExternalDNS sends.
+
+![Sequence diagram showing one ExternalDNS reconciliation through the Universal DDI webhook](docs/diagrams/reconciliation.svg)
+
+*The webhook API stays on localhost inside the pod. [PlantUML source](docs/diagrams/reconciliation.puml).*
 
 Each DNS target is one UDDI record. The provider adds the
 `external-dns=true` Portal tag, but the ExternalDNS TXT registry determines
 ownership. Use a different `txtOwnerId` for each ExternalDNS installation.
+
+See [Design](docs/DESIGN.md) for zone selection, record mapping, TXT
+normalization, and TTL behavior.
+
+## What the records look like in Universal DDI
+
+![An anonymized Universal DDI Portal record list showing records managed by ExternalDNS](docs/images/uddi-records.png)
+
+*The Portal shows each DNS target as a record and labels it with the configured
+`managed by external-dns` comment. The data in this screenshot has been
+anonymised.*
 
 ## Before you deploy
 
