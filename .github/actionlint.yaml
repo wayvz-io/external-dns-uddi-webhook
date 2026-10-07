@@ -2,6 +2,6 @@
 # not flag `runs-on` as unknown.
 self-hosted-runner:
   labels:
-    - bb-ci-worker
+    - bb-ci-worker-bombora
     - runner-nix-amd64
     - runner-nix-arm64
