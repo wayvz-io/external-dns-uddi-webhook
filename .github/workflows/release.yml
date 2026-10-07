@@ -19,8 +19,6 @@ jobs:
       contents: write   # create the GitHub release
       packages: write   # push to ghcr.io
     env:
-      BES_BACKEND: grpc://bb-portal.buildbarn:8082
-      BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
       # oci_push reads registry credentials from this directory.
       DOCKER_CONFIG: ${{ github.workspace }}/.docker
     steps:
@@ -37,8 +35,6 @@ jobs:
               --remote_cache=unix:///clientd/bb_clientd/grpc \
               --remote_instance_name=frontend.buildbarn \
               --repository_cache=/clientd/bazel-repo-cache \
-              --bes_backend="$BES_BACKEND" \
-              --bes_results_url="$BES_RESULTS_URL" \
               //...
           }
           run_tests || {
@@ -63,8 +59,6 @@ jobs:
             --remote_cache=unix:///clientd/bb_clientd/grpc \
             --remote_instance_name=frontend.buildbarn \
             --repository_cache=/clientd/bazel-repo-cache \
-            --bes_backend="$BES_BACKEND" \
-            --bes_results_url="$BES_RESULTS_URL" \
             --remote_download_outputs=all \
             --stamp --workspace_status_command=tools/workspace-status.sh \
             //:push

@@ -24,16 +24,14 @@ common:local --bes_backend=
 build:local --remote_download_toplevel
 
 # Wayvz CI overrides the endpoints with its bb-clientd socket. The remaining
-# settings describe the Buildbarn execution platform and output policy.
-build:remote --remote_executor=grpc://bb.lab.wayvz.io:8980
-build:remote --remote_instance_name=
+# settings describe the build site's execution platform and output policy.
+build:remote --remote_executor=grpc://bombora.lab.wayvz.io:8980
+build:remote --remote_instance_name=main
 build:remote --remote_timeout=3600
 build:remote --verbose_failures
 build:remote --remote_default_exec_properties=OSFamily=linux
 build:remote --remote_default_exec_properties=cpu=x86_64
 build:remote --remote_default_exec_properties=container-image=docker://ghcr.io/catthehacker/ubuntu:act-22.04
-build:remote --bes_backend=grpc://bb-portal.lab.wayvz.io:8082
-build:remote --bes_results_url=https://bb-portal.lab.wayvz.io/bazel-invocations/
 build:remote --remote_download_minimal
 build:remote --experimental_remote_cache_eviction_retries=5
 build:remote --extra_execution_platforms=//tools/remote-toolchains:remote_platform
