@@ -13,7 +13,7 @@ permissions:
 jobs:
   release:
     name: Build, push image, release
-    runs-on: bb-ci-worker
+    runs-on: bb-ci-worker-bombora
     timeout-minutes: 45
     permissions:
       contents: write   # create the GitHub release

@@ -16,9 +16,9 @@ permissions:
   contents: read
 
 jobs:
-  # The bb-ci-worker ARC runner submits remote actions to the lab Buildbarn
-  # cluster. It has Bazel 9.1.1 and bb-clientd installed. The runner reaches
-  # Buildbarn through Kubernetes Service DNS and plain gRPC. The infrastructure
+  # The bb-ci-worker-bombora ARC runner submits remote actions to the lab's
+  # Bombora build site. It has Bazel 9.1.1 and bb-clientd installed. The runner
+  # reaches the site through Kubernetes Service DNS and plain gRPC. The infrastructure
   # repository defines the runner and endpoints.
   #
   # The branch ruleset requires this job, so keep its name stable.
@@ -27,7 +27,7 @@ jobs:
     # Do not let pull requests from forks schedule the self-hosted runner.
     # GitHub also requires approval for outside collaborators.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: bb-ci-worker
+    runs-on: bb-ci-worker-bombora
     # Release the single runner slot if a job stalls.
     timeout-minutes: 30
     env:
@@ -86,7 +86,7 @@ jobs:
     if: github.event_name != 'pull_request' && github.event_name != 'merge_group'
     needs: rbe
     # bb-ci-worker has Bazel and mounts the CA bundle required by Vault.
-    runs-on: bb-ci-worker
+    runs-on: bb-ci-worker-bombora
     timeout-minutes: 20
     permissions:
       contents: read
