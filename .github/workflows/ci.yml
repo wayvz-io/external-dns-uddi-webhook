@@ -30,10 +30,6 @@ jobs:
     runs-on: bb-ci-worker-bombora
     # Release the single runner slot if a job stalls.
     timeout-minutes: 30
-    env:
-      BES_BACKEND: grpc://bb-portal.buildbarn:8082
-      # Bazel prints this URL for the invocation results.
-      BES_RESULTS_URL: https://bb-portal.lab.wayvz.io/bazel-invocations/
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -50,8 +46,6 @@ jobs:
               --remote_cache=unix:///clientd/bb_clientd/grpc \
               --remote_instance_name=frontend.buildbarn \
               --repository_cache=/clientd/bazel-repo-cache \
-              --bes_backend="$BES_BACKEND" \
-              --bes_results_url="$BES_RESULTS_URL" \
               //...
           }
           run_coverage || {
