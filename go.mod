@@ -2,7 +2,7 @@ module github.com/wayvz-io/external-dns-uddi-webhook
 
 go 1.26.6
 
-toolchain go1.27.1
+toolchain go1.27.2
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
