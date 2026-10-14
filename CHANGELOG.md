@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.2.0...v0.2.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([4ef1cb3](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/4ef1cb33341220b9ca8511c012438b1696ac638e))
+* **deps:** update all non-major dependencies ([7dfca16](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/7dfca163808d3e4dfb98989ee478e140b27a506e))
+
 ## [0.2.0](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.1.2...v0.2.0) (2026-09-16)
 
 
