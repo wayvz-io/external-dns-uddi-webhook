@@ -24,9 +24,9 @@ common:local --bes_backend=
 build:local --remote_download_toplevel
 
 # Wayvz CI overrides the endpoints with its bb-clientd socket. The remaining
-# settings describe the build site's execution platform and output policy.
-build:remote --remote_executor=grpc://bombora.lab.wayvz.io:8980
-build:remote --remote_instance_name=main
+# settings describe the RBE execution platform and output policy.
+build:remote --remote_executor=grpc://bb.lab.wayvz.io:8980
+build:remote --remote_instance_name=
 build:remote --remote_timeout=3600
 build:remote --verbose_failures
 build:remote --remote_default_exec_properties=OSFamily=linux
