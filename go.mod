@@ -6,7 +6,7 @@ toolchain go1.27.2
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/infobloxopen/universal-ddi-go-client v0.4.0
+	github.com/infobloxopen/universal-ddi-go-client v0.5.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
 	sigs.k8s.io/external-dns v0.22.0
