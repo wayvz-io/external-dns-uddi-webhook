@@ -77,8 +77,8 @@ github.com/google/pprof v0.0.0-20250501235452-c0086092b71a h1:rDA3FfmxwXR+BVKKdz
 github.com/google/pprof v0.0.0-20250501235452-c0086092b71a/go.mod h1:5hDyRhoBCxViHszMt12TnOpEI4VVi+U8Gm9iphldiMA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/hashicorp/go-uuid v1.0.3 h1:2gKiV6YVmrJ1i2CKKa9obLvRieoRGviZFL26PcT/Co8=
-github.com/hashicorp/go-uuid v1.0.3/go.mod h1:6SBZvOh/SIDV7/2o3Jml5SYk/TvGqwFJ/bN7x4byOro=
+github.com/hashicorp/go-uuid v1.0.4 h1:ZrN80XjMzpRYk+2FxMDy2A2zz0d5QjJ7GMFSkZLj12A=
+github.com/hashicorp/go-uuid v1.0.4/go.mod h1:x2Ds7vSkQ2n/yQj8Synnxmt0zt1l26uCAjxIhChisLU=
 github.com/infobloxopen/universal-ddi-go-client v0.5.0 h1:vo2PNGgqrMYJufFFSVOEi7uExm++/cR3+3H8n1comgg=
 github.com/infobloxopen/universal-ddi-go-client v0.5.0/go.mod h1:CfluuQaH/vS0c8Q9dqvGRQGW8S3y00jcKedFNCManQc=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
