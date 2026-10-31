@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.2.1...v0.2.2) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update module github.com/infobloxopen/universal-ddi-go-client to v0.5.0 ([d4b044d](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/d4b044d95cc4d0f0a3e64c9211a9a89503373227))
+* **deps:** update module github.com/infobloxopen/universal-ddi-go-client to v0.5.0 ([0b89631](https://github.com/wayvz-io/external-dns-uddi-webhook/commit/0b896319e54295c0176df98001917aeb315974d8))
+
 ## [0.2.1](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.2.0...v0.2.1) (2026-10-14)
 
 
