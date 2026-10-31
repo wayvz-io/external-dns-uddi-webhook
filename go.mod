@@ -1,22 +1,18 @@
 module github.com/wayvz-io/external-dns-uddi-webhook
 
-go 1.26.6
-
-toolchain go1.27.3
+go 1.27.3
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
 	github.com/infobloxopen/universal-ddi-go-client v0.5.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
-	sigs.k8s.io/external-dns v0.22.0
+	sigs.k8s.io/external-dns v0.24.0
 )
 
 require (
 	github.com/alecthomas/kingpin/v2 v2.4.0 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
-	github.com/aws/aws-sdk-go-v2/service/route53 v1.70.6 // indirect
-	github.com/aws/smithy-go v1.28.7 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -40,7 +36,6 @@ require (
 	github.com/go-openapi/swag/typeutils v0.29.2 // indirect
 	github.com/go-openapi/swag/yamlutils v0.29.2 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
-	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/go-uuid v1.0.4 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
