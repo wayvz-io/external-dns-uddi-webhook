@@ -22,7 +22,7 @@ import (
 // Config configures a Provider.
 type Config struct {
 	Client uddi.Client
-	// View is the DNS view name to manage.
+	// View is the DNS view name or resource ID to manage.
 	View         string
 	DomainFilter *endpoint.DomainFilter
 	DryRun       bool
@@ -82,9 +82,9 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	if cfg.DomainFilter == nil {
 		cfg.DomainFilter = endpoint.NewDomainFilter(nil)
 	}
-	viewID, err := cfg.Client.ResolveView(ctx, cfg.View)
+	viewID, err := resolveView(ctx, cfg.Client, cfg.View)
 	if err != nil {
-		return nil, fmt.Errorf("resolve view %q: %w", cfg.View, err)
+		return nil, err
 	}
 	p := &Provider{
 		client:  cfg.Client,
@@ -105,8 +105,42 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 		},
 		index: map[recordKey]indexEntry{},
 	}
-	p.log.Info("resolved view", "view_id", viewID)
+	p.log.Info("using view", "view_id", viewID)
 	return p, nil
+}
+
+// resolveView returns the resource ID of view, which is a view name or ID.
+// Keys restricted to an access view cannot list views, so an ID skips the
+// name lookup. The API lists an unknown view ID as an empty view instead of
+// failing, so the view must contain at least one zone.
+func resolveView(ctx context.Context, client uddi.Client, view string) (string, error) {
+	if uddi.IsViewID(view) {
+		zones, err := client.ListZones(ctx, view)
+		if err != nil {
+			return "", fmt.Errorf("list zones in view %q: %w", view, err)
+		}
+		if len(zones) == 0 {
+			return "", fmt.Errorf("view %q has no cloud primary zones that the API key can read; check the view ID and the key's access", view)
+		}
+		return view, nil
+	}
+	if strings.HasPrefix(view, "dns/view/") {
+		return "", fmt.Errorf("view %q is not a view ID of the form dns/view/<uuid>", view)
+	}
+	id, err := client.ResolveView(ctx, view)
+	if err == nil {
+		return id, nil
+	}
+	if !errors.Is(err, uddi.ErrNotFound) {
+		return "", fmt.Errorf("resolve view %q: %w", view, err)
+	}
+	// A bare UUID is looked up as a name. Point at the resource ID form.
+	if uddi.IsViewID("dns/view/" + view) {
+		return "", fmt.Errorf("resolve view %q: %w; use the resource ID dns/view/%s", view, err, view)
+	}
+	// A key restricted to an access view lists no views, so every name is
+	// not found.
+	return "", fmt.Errorf("resolve view %q: %w; if the name is correct, this credential is likely restricted to an access view and cannot list views; use the view's resource ID, dns/view/<uuid>, instead of its name", view, err)
 }
 
 // ViewID returns the resolved view resource id.

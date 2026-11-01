@@ -75,6 +75,8 @@ spec:
                   key: api_key
             - name: INFOBLOX_PORTAL_URL
               value: https://csp.infoblox.com
+            # A view name, or a resource ID such as dns/view/<uuid> for keys
+            # restricted to an access view.
             - name: UDDI_VIEW
               value: my-view
             - name: DOMAIN_FILTER

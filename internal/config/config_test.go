@@ -53,7 +53,7 @@ func TestLoadOverrides(t *testing.T) {
 	environ["LOG_LEVEL"] = "debug"
 	environ["LOG_FORMAT"] = "text"
 	environ["INFOBLOX_PORTAL_URL"] = "https://portal.example.net/"
-	environ["UDDI_VIEW"] = "lab"
+	environ["UDDI_VIEW"] = " lab\n"
 	environ["UDDI_ZONE_CACHE_TTL"] = "30s"
 	environ["UDDI_PAGE_LIMIT"] = "50"
 	environ["UDDI_DEFAULT_TTL"] = "300"

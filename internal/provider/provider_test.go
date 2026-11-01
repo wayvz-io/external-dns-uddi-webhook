@@ -22,6 +22,9 @@ const (
 	viewID = "dns/view/default"
 	zone1  = "dns/auth_zone/example-com"
 	zone2  = "dns/auth_zone/sub-example-com"
+
+	directViewUUID = "23311109-fad4-448f-a7a7-55ad791ae7eb"
+	directViewID   = "dns/view/" + directViewUUID
 )
 
 type harness struct {
@@ -89,6 +92,19 @@ func TestNew(t *testing.T) {
 		fake := uddi.NewFake()
 		_, err := New(context.Background(), Config{Client: fake, View: "missing"})
 		require.ErrorIs(t, err, uddi.ErrNotFound)
+		assert.ErrorContains(t, err, "likely restricted to an access view")
+	})
+	t.Run("access view key", func(t *testing.T) {
+		// The key lists no views but can list the zones of its view.
+		fake := uddi.NewFake()
+		fake.Views = map[string]string{}
+		fake.AddZone(uddi.Zone{ID: zone1, FQDN: "example.com", ViewID: directViewID, PrimaryType: "cloud"})
+		_, err := New(context.Background(), Config{Client: fake, View: "default"})
+		require.ErrorIs(t, err, uddi.ErrNotFound)
+		assert.ErrorContains(t, err, "use the view's resource ID")
+		p, err := New(context.Background(), Config{Client: fake, View: directViewID})
+		require.NoError(t, err)
+		assert.Equal(t, directViewID, p.ViewID())
 	})
 	t.Run("defaults", func(t *testing.T) {
 		fake := uddi.NewFake()
@@ -100,6 +116,50 @@ func TestNew(t *testing.T) {
 		require.True(t, ok)
 		assert.False(t, df.IsConfigured())
 		assert.True(t, df.Match("anything"))
+	})
+	t.Run("view id skips lookup", func(t *testing.T) {
+		fake := uddi.NewFake()
+		fake.AddZone(uddi.Zone{ID: zone1, FQDN: "example.com", ViewID: directViewID, PrimaryType: "cloud"})
+		p, err := New(context.Background(), Config{Client: fake, View: directViewID})
+		require.NoError(t, err)
+		assert.Equal(t, directViewID, p.ViewID())
+		assert.Empty(t, fake.CallsTo("ResolveView"))
+		calls := fake.CallsTo("ListZones")
+		require.Len(t, calls, 1)
+		assert.Equal(t, directViewID, calls[0].Arg)
+	})
+	t.Run("view id without zones", func(t *testing.T) {
+		fake := uddi.NewFake()
+		fake.AddZone(uddi.Zone{ID: zone1, FQDN: "example.com", ViewID: viewID, PrimaryType: "cloud"})
+		_, err := New(context.Background(), Config{Client: fake, View: directViewID})
+		require.ErrorContains(t, err, "no cloud primary zones")
+	})
+	t.Run("view id with only external zones", func(t *testing.T) {
+		fake := uddi.NewFake()
+		fake.AddZone(uddi.Zone{ID: zone1, FQDN: "example.com", ViewID: directViewID, PrimaryType: "external"})
+		_, err := New(context.Background(), Config{Client: fake, View: directViewID})
+		require.ErrorContains(t, err, "no cloud primary zones")
+	})
+	t.Run("view id zone list failure", func(t *testing.T) {
+		fake := uddi.NewFake()
+		fake.FailWith("ListZones", &uddi.Error{Op: "ListZones", StatusCode: 403, Err: errors.New("forbidden")})
+		_, err := New(context.Background(), Config{Client: fake, View: directViewID})
+		var uerr *uddi.Error
+		require.ErrorAs(t, err, &uerr)
+		assert.Equal(t, 403, uerr.StatusCode)
+	})
+	t.Run("malformed view id", func(t *testing.T) {
+		fake := uddi.NewFake()
+		_, err := New(context.Background(), Config{Client: fake, View: "dns/view/default"})
+		require.ErrorContains(t, err, "not a view ID")
+		assert.Empty(t, fake.Calls())
+	})
+	t.Run("bare uuid suggests view id", func(t *testing.T) {
+		fake := uddi.NewFake()
+		_, err := New(context.Background(), Config{Client: fake, View: directViewUUID})
+		require.ErrorIs(t, err, uddi.ErrNotFound)
+		assert.ErrorContains(t, err, "use the resource ID "+directViewID)
+		assert.NotContains(t, err.Error(), "access view")
 	})
 }
 
