@@ -77,8 +77,6 @@ github.com/google/pprof v0.0.0-20250501235452-c0086092b71a h1:rDA3FfmxwXR+BVKKdz
 github.com/google/pprof v0.0.0-20250501235452-c0086092b71a/go.mod h1:5hDyRhoBCxViHszMt12TnOpEI4VVi+U8Gm9iphldiMA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/hashicorp/go-uuid v1.0.4 h1:ZrN80XjMzpRYk+2FxMDy2A2zz0d5QjJ7GMFSkZLj12A=
-github.com/hashicorp/go-uuid v1.0.4/go.mod h1:x2Ds7vSkQ2n/yQj8Synnxmt0zt1l26uCAjxIhChisLU=
 github.com/infobloxopen/universal-ddi-go-client v0.5.0 h1:vo2PNGgqrMYJufFFSVOEi7uExm++/cR3+3H8n1comgg=
 github.com/infobloxopen/universal-ddi-go-client v0.5.0/go.mod h1:CfluuQaH/vS0c8Q9dqvGRQGW8S3y00jcKedFNCManQc=
 github.com/json-iterator/go v1.1.12 h1:PV8peI4a0ysnczrg+LtxykD8LfKY9ML6u2jnxaEnrnM=
@@ -105,8 +103,8 @@ github.com/openshift/api v0.0.0-20260819011109-af5c920502e2 h1:4sbMvxHa7yrTGTrBe
 github.com/openshift/api v0.0.0-20260819011109-af5c920502e2/go.mod h1:k6qH5QOVa5GDln2VVm8Jz4NV3Z7R2SATHFLwGS6Wh3M=
 github.com/openshift/client-go v0.0.0-20260810202730-ddca5e0b7146 h1:fX/gaOPiS2vrYGSAFSeqqoWjj32H+NbMmB5RDjwhCnU=
 github.com/openshift/client-go v0.0.0-20260810202730-ddca5e0b7146/go.mod h1:bhbP5y308NNbImrgArOc9611HIDAMcNWdCCO4tq5ob4=
-github.com/pandatix/go-abnf v0.5.1 h1:iyLvSu2Aq12iE0r4n948Qw21BHDuckLq/8WIXAAF+HI=
-github.com/pandatix/go-abnf v0.5.1/go.mod h1:VBmbtpFgQNEaQpyAvmi+Ecd9wAYJKzA3TmiB3L93sVg=
+github.com/pandatix/go-abnf v0.5.2 h1:bVnZpPmCZCx0NHWPKGWN794zTl3pOeu0ScM6tyHSwd0=
+github.com/pandatix/go-abnf v0.5.2/go.mod h1:HMMELaOyXENznalC208FqWgG4nqG7cuUKSoaiRW+1SQ=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
