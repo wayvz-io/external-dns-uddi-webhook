@@ -20,6 +20,15 @@ import (
 	"sigs.k8s.io/external-dns/provider/webhook/api"
 )
 
+// The webhook API uses the ExternalDNS defaults for the limits that
+// SERVER_READ_TIMEOUT and SERVER_WRITE_TIMEOUT do not cover. The ExternalDNS
+// webhook client applies the same body limit to responses.
+const (
+	apiReadHeaderTimeout = 5 * time.Second
+	apiIdleTimeout       = 30 * time.Second
+	apiMaxBodySize       = 32 << 20
+)
+
 // Config configures the listeners.
 type Config struct {
 	// ServerAddr is the webhook API listen address, for example "localhost:8888".
@@ -126,7 +135,16 @@ func (s *Server) Start(ctx context.Context) error {
 		}
 	}()
 	// StartHTTPApi blocks and calls log.Fatal if it cannot bind.
-	go api.StartHTTPApi(s.prov, started, s.cfg.ReadTimeout, s.cfg.WriteTimeout, s.cfg.ServerAddr)
+	go api.StartHTTPApi(api.ServerOptions{
+		Provider:          s.prov,
+		StartedChan:       started,
+		ProviderPort:      s.cfg.ServerAddr,
+		ReadTimeout:       s.cfg.ReadTimeout,
+		WriteTimeout:      s.cfg.WriteTimeout,
+		ReadHeaderTimeout: apiReadHeaderTimeout,
+		IdleTimeout:       apiIdleTimeout,
+		MaxBodySize:       apiMaxBodySize,
+	})
 	return nil
 }
 
