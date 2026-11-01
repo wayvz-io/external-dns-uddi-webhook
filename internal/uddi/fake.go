@@ -24,7 +24,8 @@ type Fake struct {
 
 	// Views maps view name to view id.
 	Views map[string]string
-	// Zones are the zones returned by ListZones (filtered by view id).
+	// Zones are the zones returned by ListZones, filtered by view ID. Like the
+	// API client, ListZones skips zones whose PrimaryType is set and not "cloud".
 	Zones []Zone
 	// Errors injects a failure for each named method.
 	Errors map[string]error
@@ -152,6 +153,9 @@ func (f *Fake) ListZones(ctx context.Context, viewID string) ([]Zone, error) {
 	}
 	var out []Zone
 	for _, z := range f.Zones {
+		if z.PrimaryType != "" && z.PrimaryType != "cloud" {
+			continue
+		}
 		if z.ViewID == viewID || z.ViewID == "" {
 			out = append(out, z)
 		}

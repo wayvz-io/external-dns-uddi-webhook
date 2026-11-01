@@ -42,7 +42,8 @@ type Config struct {
 	PortalKey string `env:"INFOBLOX_PORTAL_KEY"`
 	PortalURL string `env:"INFOBLOX_PORTAL_URL" envDefault:"https://csp.infoblox.com"`
 
-	// View is the DNS view name. The provider resolves it to a resource ID at startup.
+	// View is the DNS view name or resource ID. The provider resolves a name
+	// to a resource ID at startup.
 	View string `env:"UDDI_VIEW" envDefault:"default"`
 	// ZoneFilter restricts managed authoritative zones by FQDN.
 	// Empty means every zone in the view that the domain filter allows.
@@ -66,6 +67,7 @@ func Load(environ map[string]string) (*Config, error) {
 	if err := env.ParseWithOptions(cfg, opts); err != nil {
 		return nil, fmt.Errorf("parse environment: %w", err)
 	}
+	cfg.View = strings.TrimSpace(cfg.View)
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}

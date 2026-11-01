@@ -25,6 +25,7 @@ go_test(
         "client_test.go",
         "errors_test.go",
         "fake_test.go",
+        "types_test.go",
     ],
     embed = [":uddi"],
     deps = [

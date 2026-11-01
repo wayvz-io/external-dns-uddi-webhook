@@ -22,6 +22,11 @@ view's `cloud` primary authoritative zones and keeps only zones allowed by both
 the domain filter and `UDDI_ZONE_FILTER`. The provider caches this list for
 `UDDI_ZONE_CACHE_TTL`.
 
+When `UDDI_VIEW` is already a resource ID, `dns/view/<uuid>`, the provider
+skips the name lookup, because a key restricted to an access view cannot list
+views. The API returns an empty zone list for an unknown view ID, so the
+provider fails at startup if that view has no `cloud` primary zones.
+
 For each endpoint, the longest matching zone suffix selects the UDDI zone. One
 ExternalDNS endpoint can contain several targets, while one UDDI object stores
 one target. The provider therefore creates one UDDI record per target and

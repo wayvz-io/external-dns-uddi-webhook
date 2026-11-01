@@ -2,7 +2,17 @@
 // provider and its tests.
 package uddi
 
-import "context"
+import (
+	"context"
+	"regexp"
+)
+
+var viewIDPattern = regexp.MustCompile(`^dns/view/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+
+// IsViewID reports whether s is a view resource ID, for example
+// "dns/view/<uuid>", rather than a view name. The API issues lowercase UUIDs
+// and compares IDs exactly, so uppercase is not an ID.
+func IsViewID(s string) bool { return viewIDPattern.MatchString(s) }
 
 // Zone is an authoritative DNS zone in a view.
 type Zone struct {
