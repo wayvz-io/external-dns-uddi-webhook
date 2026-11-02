@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.3.0 (2026-11-02)
+
+## What's Changed
+* chore(deps): update actions/create-github-app-token action to v3.3.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/57
+* chore(deps): update github/codeql-action action to v4.39.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/59
+* chore(deps): update all non-major dependencies by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/61
+* chore(deps): update go toolchain directive to v1.27.3 [security] by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/60
+* fix(deps): update module github.com/infobloxopen/universal-ddi-go-client to v0.5.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/58
+* chore(deps): update module github.com/aws/aws-sdk-go-v2/service/route53 to v1.70.5 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/63
+* chore(deps): update k8s.io/utils digest to ca04ba5 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/64
+* chore(deps): update module github.com/prometheus/procfs to v0.23.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/65
+* chore(deps): update module golang.org/x/net to v0.62.0 [security] by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/66
+* chore(deps): update module github.com/aws/smithy-go to v1.28.7 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/68
+* chore(deps): update module github.com/aws/aws-sdk-go-v2/service/route53 to v1.70.6 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/69
+* chore(deps): update module k8s.io/apimachinery to v0.37.2 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/70
+* chore(deps): update all non-major dependencies to v0.37.2 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/71
+* chore(deps): update module github.com/prometheus/common to v0.73.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/72
+* chore(deps): update module github.com/hashicorp/go-uuid to v1.0.4 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/73
+* chore(deps): update module github.com/fxamacker/cbor/v2 to v2.10.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/74
+* chore(deps): update module github.com/pandatix/go-abnf to v0.5.2 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/76
+* chore(deps): update module github.com/pandatix/go-abnf to v0.5.3 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/77
+* feat(provider): accept a view resource ID in UDDI_VIEW by @wayvz-developer-agent-rory[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/75
+* fix(deps): update module sigs.k8s.io/external-dns to v0.24.0 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/36
+* chore: build the changelog from merged pull requests by @wayvz-developer-agent-rory[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/78
+
+
+**Full Changelog**: https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.2.1...v0.3.0
+
 ## [0.2.1](https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.2.0...v0.2.1) (2026-10-14)
 
 
