@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.1 (2026-11-06)
+
+## What's Changed
+* chore(deps): update all non-major dependencies by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/79
+* chore(deps): update module go.yaml.in/yaml/v2 to v2.4.5 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/82
+* fix(deps): update module github.com/caarlos0/env/v11 to v11.4.2 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/83
+* chore(deps): update github/codeql-action action to v4.39.2 by @wayvzrenovate[bot] in https://github.com/wayvz-io/external-dns-uddi-webhook/pull/84
+
+
+**Full Changelog**: https://github.com/wayvz-io/external-dns-uddi-webhook/compare/v0.3.0...v0.3.1
+
 ## 0.3.0 (2026-11-02)
 
 ## What's Changed
