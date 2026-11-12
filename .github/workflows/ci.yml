@@ -109,7 +109,7 @@ jobs:
           role: external-dns-uddi-webhook-ci
           jwtGithubAudience: https://github.com/wayvz-io
           secrets: |
-            kv/data/sonarqube/default/user-token token | SONAR_TOKEN
+            kv/data/external-dns-uddi-webhook-ci/prod-github-actions/sonar-token token | SONAR_TOKEN
 
       - name: Download Go coverage
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
