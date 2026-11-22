@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/caarlos0/env/v11 v11.4.2
-	github.com/infobloxopen/universal-ddi-go-client v0.5.0
+	github.com/infobloxopen/universal-ddi-go-client v0.6.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
 	sigs.k8s.io/external-dns v0.24.0
